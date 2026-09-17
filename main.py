@@ -4,12 +4,17 @@ load_dotenv()
 
 import logging
 
+from pathlib import Path
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from extraction import extract_text
 from claude_client import generate_questions, grade_answer
+
+ROOT = Path(__file__).parent
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +28,11 @@ app.add_middleware(
 )
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+
+
+@app.get("/")
+def index():
+    return FileResponse(ROOT / "index.html")
 
 
 @app.get("/health")

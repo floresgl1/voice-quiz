@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Quiz</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    #app {
+      max-width: 640px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 1rem;
+    }
+
+    button {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #1a1a1a;
+    }
+
+    .btn-record {
+      background: #dc2626;
+      color: #fff;
+    }
+
+    .btn-record.recording {
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    input[type="file"] {
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+
+    .score-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      background: #fff;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: #6b7280;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 0.75rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .question-text {
+      font-size: 1.1rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+    }
+
+    .transcript {
+      padding: 0.75rem;
+      background: #f9fafb;
+      border-radius: 8px;
+      min-height: 2.5rem;
+      margin-bottom: 1rem;
+      font-style: italic;
+      color: #374151;
+    }
+
+    .feedback {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+
+    .feedback.correct { background: #dcfce7; }
+    .feedback.partially_correct { background: #fef9c3; }
+    .feedback.incorrect { background: #fee2e2; }
+
+    .feedback .judgment-label {
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .feedback .explanation {
+      margin-bottom: 0.75rem;
+    }
+
+    .feedback .expected {
+      font-size: 0.9rem;
+      color: #374151;
+    }
+
+    .error-msg {
+      color: #dc2626;
+      background: #fee2e2;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .summary-item {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .summary-item:last-child { border-bottom: none; }
+
+    .summary-badge {
+      flex-shrink: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .summary-badge.correct { background: #16a34a; }
+    .summary-badge.partially_correct { background: #ca8a04; }
+    .summary-badge.incorrect { background: #dc2626; }
+    .summary-badge.skipped { background: #9ca3af; }
+
+    .summary-detail {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .summary-detail .q-text {
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .summary-detail .q-explanation {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Voice Quiz</h1>
+
+    <!-- Upload Screen -->
+    <div id="screen-upload">
+      <div class="card">
+        <p class="label">Upload a study file</p>
+        <input type="file" id="file-input" accept=".pdf,.docx">
+        <button class="btn-primary" id="btn-upload" disabled>Generate Quiz</button>
+      </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="screen-loading" class="hidden">
+      <div class="card loading">
+        <div class="spinner"></div>
+        <p>Generating questions from your file...</p>
+        <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #9ca3af;">This may take 10-30 seconds.</p>
+      </div>
+    </div>
+
+    <!-- Quiz Screen -->
+    <div id="screen-quiz" class="hidden">
+      <div class="score-bar">
+        <span id="progress">Question 1 / 10</span>
+        <span id="score">0 / 0 points</span>
+      </div>
+
+      <div class="card">
+        <p class="label">Question</p>
+        <p class="question-text" id="question-text"></p>
+
+        <div id="answer-section">
+          <p class="label">Your Answer</p>
+          <div class="transcript" id="transcript">Press record to answer...</div>
+          <div class="btn-row">
+            <button class="btn-record" id="btn-record">Record</button>
+            <button class="btn-secondary" id="btn-skip">Skip</button>
+          </div>
+        </div>
+
+        <div id="grading-section" class="hidden">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Grading your answer...</p>
+          </div>
+        </div>
+
+        <div id="feedback-section" class="hidden">
+          <!-- filled by JS -->
+        </div>
+
+        <div id="next-section" class="hidden">
+          <div class="btn-row">
+            <button class="btn-primary" id="btn-next">Next Question</button>
+            <button class="btn-secondary" id="btn-end">End Quiz</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Screen -->
+    <div id="screen-summary" class="hidden">
+      <div class="card">
+        <p class="label">Final Score</p>
+        <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="final-score"></p>
+        <div id="summary-list"></div>
+      </div>
+      <button class="btn-primary" id="btn-restart" style="width: 100%; margin-top: 0.5rem;">Start New Quiz</button>
+    </div>
+
+    <!-- Error display -->
+    <div id="error-container" class="hidden">
+      <div class="error-msg" id="error-msg"></div>
+    </div>
+  </div>
+
+<script>
+const API = "";
+
+// --- State ---
+let questions = [];
+let currentIndex = 0;
+let totalPoints = 0;
+let recognition = null;
+let isRecording = false;
+
+// --- DOM refs ---
+const $ = (id) => document.getElementById(id);
+
+const screens = {
+  upload:  $("screen-upload"),
+  loading: $("screen-loading"),
+  quiz:    $("screen-quiz"),
+  summary: $("screen-summary"),
+};
+
+function showScreen(name) {
+  Object.values(screens).forEach(s => s.classList.add("hidden"));
+  screens[name].classList.remove("hidden");
+}
+
+function showError(msg) {
+  $("error-msg").textContent = msg;
+  $("error-container").classList.remove("hidden");
+  setTimeout(() => $("error-container").classList.add("hidden"), 8000);
+}
+
+// --- Upload ---
+$("file-input").addEventListener("change", () => {
+  $("btn-upload").disabled = !$("file-input").files.length;
+});
+
+$("btn-upload").addEventListener("click", async () => {
+  const file = $("file-input").files[0];
+  if (!file) return;
+
+  showScreen("loading");
+  $("error-container").classList.add("hidden");
+
+  const form = new FormData();
+  form.append("file", file);
+
+  try {
+    const res = await fetch(`${API}/upload`, { method: "POST", body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Upload failed");
+    }
+    questions = await res.json();
+    questions.forEach(q => { q.status = "pending"; });
+    currentIndex = 0;
+    totalPoints = 0;
+    startQuiz();
+  } catch (e) {
+    showError(e.message);
+    showScreen("upload");
+  }
+});
+
+// --- Quiz ---
+function startQuiz() {
+  showScreen("quiz");
+  showQuestion();
+}
+
+function showQuestion() {
+  const q = questions[currentIndex];
+  $("question-text").textContent = q.question;
+  $("progress").textContent = `Question ${currentIndex + 1} / ${questions.length}`;
+  updateScore();
+
+  $("answer-section").classList.remove("hidden");
+  $("grading-section").classList.add("hidden");
+  $("feedback-section").classList.add("hidden");
+  $("next-section").classList.add("hidden");
+  $("transcript").textContent = "Press record to answer...";
+  $("btn-record").textContent = "Record";
+  $("btn-record").classList.remove("recording");
+  $("btn-record").disabled = false;
+  $("btn-skip").disabled = false;
+
+  speak(q.question);
+}
+
+function updateScore() {
+  const answered = questions.filter(q => q.status !== "pending").length;
+  const maxPoints = answered;
+  $("score").textContent = `${totalPoints} / ${maxPoints} points`;
+}
+
+// --- TTS ---
+function speak(text) {
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  window.speechSynthesis.speak(utterance);
+}
+
+// --- STT ---
+function initRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showError("Speech recognition is not supported in this browser. Use Chrome.");
+    return null;
+  }
+  const rec = new SpeechRecognition();
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = "en-US";
+
+  let finalTranscript = "";
+
+  rec.onresult = (event) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalTranscript += t;
+      } else {
+        interim += t;
+      }
+    }
+    $("transcript").textContent = finalTranscript + interim || "Listening...";
+  };
+
+  rec.onerror = (event) => {
+    if (event.error !== "aborted") {
+      showError(`Speech recognition error: ${event.error}`);
+    }
+    stopRecording();
+  };
+
+  rec.onend = () => {
+    if (isRecording) {
+      stopRecording();
+      if (finalTranscript.trim()) {
+        submitAnswer(finalTranscript.trim());
+      }
+    }
+  };
+
+  rec._getFinal = () => finalTranscript;
+  rec._resetFinal = () => { finalTranscript = ""; };
+
+  return rec;
+}
+
+function startRecording() {
+  window.speechSynthesis.cancel();
+  recognition = initRecognition();
+  if (!recognition) return;
+
+  isRecording = true;
+  recognition._resetFinal();
+  $("transcript").textContent = "Listening...";
+  $("btn-record").textContent = "Stop";
+  $("btn-record").classList.add("recording");
+  $("btn-skip").disabled = true;
+  recognition.start();
+}
+
+function stopRecording() {
+  isRecording = false;
+  $("btn-record").textContent = "Record";
+  $("btn-record").classList.remove("recording");
+  if (recognition) {
+    const finalText = recognition._getFinal();
+    recognition.stop();
+    recognition = null;
+    if (finalText.trim()) {
+      submitAnswer(finalText.trim());
+    }
+  }
+}
+
+$("btn-record").addEventListener("click", () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
+
+// --- Grading ---
+async function submitAnswer(userAnswer) {
+  const q = questions[currentIndex];
+  q.user_answer = userAnswer;
+
+  $("answer-section").classList.add("hidden");
+  $("grading-section").classList.remove("hidden");
+
+  try {
+    const res = await fetch(`${API}/grade`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: q.question,
+        expected_answer: q.expected_answer,
+        user_answer: userAnswer,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Grading failed");
+    }
+
+    const result = await res.json();
+    q.status = "graded";
+    q.judgment = result.judgment;
+    q.score = result.score;
+    q.explanation = result.explanation;
+    totalPoints += q.score;
+
+    showFeedback(q);
+  } catch (e) {
+    showError(e.message);
+    $("grading-section").classList.add("hidden");
+    $("answer-section").classList.remove("hidden");
+  }
+}
+
+function showFeedback(q) {
+  $("grading-section").classList.add("hidden");
+
+  const judgmentLabels = {
+    correct: "Correct",
+    partially_correct: "Partially Correct",
+    incorrect: "Incorrect",
+  };
+
+  $("feedback-section").innerHTML = `
+    <div class="feedback ${q.judgment}">
+      <p class="judgment-label">${judgmentLabels[q.judgment]} (${q.score} pt)</p>
+      <p class="explanation">${q.explanation}</p>
+      <p class="expected"><strong>Expected answer:</strong> ${q.expected_answer}</p>
+    </div>
+  `;
+  $("feedback-section").classList.remove("hidden");
+  $("next-section").classList.remove("hidden");
+  updateScore();
+
+  if (currentIndex >= questions.length - 1) {
+    $("btn-next").textContent = "View Summary";
+  }
+}
+
+// --- Skip ---
+$("btn-skip").addEventListener("click", () => {
+  window.speechSynthesis.cancel();
+  if (recognition) {
+    isRecording = false;
+    recognition.stop();
+    recognition = null;
+  }
+
+  const q = questions[currentIndex];
+  q.status = "skipped";
+  q.user_answer = null;
+  q.judgment = null;
+  q.score = 0.0;
+  q.explanation = "Question skipped.";
+
+  $("answer-section").classList.add("hidden");
+  $("feedback-section").innerHTML = `
+    <div class="feedback incorrect">
+      <p class="judgment-label">Skipped (0 pt)</p>
+      <p class="expected"><strong>Expected answer:</strong> ${q.expected_answer}</p>
+    </div>
+  `;
+  $("feedback-section").classList.remove("hidden");
+  $("next-section").classList.remove("hidden");
+  updateScore();
+
+  if (currentIndex >= questions.length - 1) {
+    $("btn-next").textContent = "View Summary";
+  }
+});
+
+// --- Navigation ---
+$("btn-next").addEventListener("click", () => {
+  currentIndex++;
+  if (currentIndex >= questions.length) {
+    showSummary();
+  } else {
+    showQuestion();
+  }
+});
+
+$("btn-end").addEventListener("click", () => {
+  questions.forEach(q => {
+    if (q.status === "pending") {
+      q.status = "skipped";
+      q.user_answer = null;
+      q.judgment = null;
+      q.score = 0.0;
+      q.explanation = "Question skipped.";
+    }
+  });
+  showSummary();
+});
+
+// --- Summary ---
+function showSummary() {
+  window.speechSynthesis.cancel();
+  showScreen("summary");
+
+  const maxPoints = questions.length;
+  $("final-score").textContent = `${totalPoints} / ${maxPoints} points`;
+
+  const list = $("summary-list");
+  list.innerHTML = questions.map((q, i) => {
+    const badgeClass = q.status === "skipped" ? "skipped" : (q.judgment || "incorrect");
+    const badgeLabel = q.score === 1 ? "1" : q.score === 0.5 ? ".5" : "0";
+
+    return `
+      <div class="summary-item">
+        <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
+        <div class="summary-detail">
+          <p class="q-text">${i + 1}. ${q.question}</p>
+          <p class="q-explanation">${q.explanation}</p>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+$("btn-restart").addEventListener("click", () => {
+  questions = [];
+  currentIndex = 0;
+  totalPoints = 0;
+  $("file-input").value = "";
+  $("btn-upload").disabled = true;
+  showScreen("upload");
+});
+</script>
+</body>
+</html>
