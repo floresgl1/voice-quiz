@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from extraction import extract_text
-from claude_client import generate_questions, grade_answer
+from claude_client import generate_questions, grade_answer, explain_concept
 
 ROOT = Path(__file__).parent
 
@@ -79,6 +79,22 @@ def grade(req: GradeRequest):
         log.exception("Claude API error during grading")
         raise HTTPException(502, f"AI service error: {e}")
     return result
+
+
+class ExplainRequest(BaseModel):
+    question: str
+    expected_answer: str
+    user_attempts: list[str]
+
+
+@app.post("/explain")
+def explain(req: ExplainRequest):
+    try:
+        explanation = explain_concept(req.question, req.expected_answer, req.user_attempts)
+    except Exception as e:
+        log.exception("Claude API error during explanation")
+        raise HTTPException(502, f"AI service error: {e}")
+    return {"explanation": explanation}
 
 
 def _get_extension(filename: str | None) -> str:

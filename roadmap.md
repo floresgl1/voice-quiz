@@ -31,6 +31,17 @@
 
 ---
 
+## v1.2 — Concept Explainer
+**Goal:** Help you learn from questions you couldn't answer after retries.
+
+- [x] After exhausting 2 retries on a question, show a "Help me understand" button
+- [x] Calls a new `/explain` endpoint that sends the question, expected answer, and user's attempts to Claude
+- [x] Claude returns a teaching-style breakdown: why the answer is correct, the underlying concept, and what to review
+- [x] Include code examples and snippets when applicable (e.g., for programming or technical questions)
+- [x] Explanation displayed inline in the feedback section
+
+---
+
 ## v2 — Persistence & Quality Control
 **Goal:** Remember what happened and catch AI mistakes.
 
@@ -56,6 +67,7 @@
 ---
 
 ## Future (unscoped)
+- Rich question formatting (render formulas, symbols, and code snippets properly — e.g., KaTeX for math, inline code styling)
 - User accounts / multi-user support
 - Spaced repetition (resurface questions you got wrong days later)
 - Multiple answer modes (multiple choice, typed, voice)

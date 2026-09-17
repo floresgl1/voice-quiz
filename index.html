@@ -215,6 +215,54 @@
       color: #6b7280;
     }
 
+    .explain-section {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+    }
+
+    .explain-section .explain-title {
+      font-weight: 700;
+      color: #1d4ed8;
+      margin-bottom: 0.75rem;
+    }
+
+    .explain-section .explain-body {
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .explain-section .explain-body code {
+      background: #f1f5f9;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    .explain-section .explain-body pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      white-space: pre;
+    }
+
+    .explain-section .explain-body pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+    }
+
+    .btn-explain {
+      background: #3b82f6;
+      color: #fff;
+      margin-top: 0.75rem;
+    }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -362,6 +410,7 @@ $("btn-upload").addEventListener("click", async () => {
       q.status = "pending";
       q.retries = 0;
       q.bestScore = 0;
+      q.attempts = [];
     });
     queue = questions.map((_, i) => i);
     queuePos = 0;
@@ -524,6 +573,7 @@ $("btn-submit-typed").addEventListener("click", () => {
 async function submitAnswer(userAnswer) {
   const q = questions[currentIndex];
   q.user_answer = userAnswer;
+  q.attempts.push(userAnswer);
 
   $("answer-section").classList.add("hidden");
   $("grading-section").classList.remove("hidden");
@@ -565,12 +615,15 @@ async function submitAnswer(userAnswer) {
       queue.splice(insertAt, 0, currentIndex);
     }
 
+    const retriesExhausted = result.judgment === "incorrect" && q.retries >= 2 && !willRetry;
     showFeedback({
       judgment: result.judgment,
       score: newScore,
       explanation: result.explanation,
       expected_answer: q.expected_answer,
       willRetry,
+      retriesExhausted,
+      questionIndex: currentIndex,
     });
   } catch (e) {
     showError(e.message);
@@ -592,20 +645,81 @@ function showFeedback(fb) {
     ? `<p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">This question will come back later.</p>`
     : "";
 
+  const explainBtn = fb.retriesExhausted
+    ? `<button class="btn-explain" id="btn-explain" data-qi="${fb.questionIndex}">Help me understand</button>`
+    : "";
+
   $("feedback-section").innerHTML = `
     <div class="feedback ${fb.judgment}">
       <p class="judgment-label">${judgmentLabels[fb.judgment]} (${fb.score} pt)</p>
       <p class="explanation">${fb.explanation}</p>
       <p class="expected"><strong>Expected answer:</strong> ${fb.expected_answer}</p>
       ${retryNote}
+      ${explainBtn}
     </div>
   `;
+
+  if (fb.retriesExhausted) {
+    $("btn-explain").addEventListener("click", handleExplain);
+  }
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
   updateScore();
 
   if (queuePos >= queue.length - 1) {
     $("btn-next").textContent = "View Summary";
+  }
+}
+
+// --- Explain ---
+function formatExplanation(text) {
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    return `<pre><code>${code.trimEnd()}</code></pre>`;
+  });
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  return html;
+}
+
+async function handleExplain(e) {
+  const qi = parseInt(e.target.dataset.qi);
+  const q = questions[qi];
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Loading...";
+
+  try {
+    const res = await fetch(`${API}/explain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: q.question,
+        expected_answer: q.expected_answer,
+        user_attempts: q.attempts,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Explain failed");
+    }
+
+    const data = await res.json();
+    btn.remove();
+    const explainDiv = document.createElement("div");
+    explainDiv.className = "explain-section";
+    explainDiv.innerHTML = `
+      <p class="explain-title">Concept Breakdown</p>
+      <div class="explain-body">${formatExplanation(data.explanation)}</div>
+    `;
+    $("feedback-section").querySelector(".feedback").appendChild(explainDiv);
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "Help me understand";
   }
 }
 
