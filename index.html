@@ -310,6 +310,8 @@ const API = "";
 let questions = [];
 let currentIndex = 0;
 let totalPoints = 0;
+let queue = [];
+let queuePos = 0;
 let recognition = null;
 let isRecording = false;
 
@@ -356,8 +358,13 @@ $("btn-upload").addEventListener("click", async () => {
       throw new Error(err.detail || "Upload failed");
     }
     questions = await res.json();
-    questions.forEach(q => { q.status = "pending"; });
-    currentIndex = 0;
+    questions.forEach(q => {
+      q.status = "pending";
+      q.retries = 0;
+      q.bestScore = 0;
+    });
+    queue = questions.map((_, i) => i);
+    queuePos = 0;
     totalPoints = 0;
     startQuiz();
   } catch (e) {
@@ -373,9 +380,11 @@ function startQuiz() {
 }
 
 function showQuestion() {
+  currentIndex = queue[queuePos];
   const q = questions[currentIndex];
+  const retryLabel = q.retries > 0 ? ` (Retry ${q.retries}/2)` : "";
   $("question-text").textContent = q.question;
-  $("progress").textContent = `Question ${currentIndex + 1} / ${questions.length}`;
+  $("progress").textContent = `Question ${queuePos + 1} / ${queue.length}${retryLabel}`;
   updateScore();
 
   $("answer-section").classList.remove("hidden");
@@ -389,13 +398,13 @@ function showQuestion() {
   $("btn-skip").disabled = false;
   $("typed-answer").value = "";
   $("btn-submit-typed").disabled = true;
+  $("btn-next").textContent = "Next Question";
 
   speak(q.question);
 }
 
 function updateScore() {
-  const answered = questions.filter(q => q.status !== "pending").length;
-  const maxPoints = answered;
+  const maxPoints = questions.length;
   $("score").textContent = `${totalPoints} / ${maxPoints} points`;
 }
 
@@ -536,13 +545,33 @@ async function submitAnswer(userAnswer) {
     }
 
     const result = await res.json();
-    q.status = "graded";
-    q.judgment = result.judgment;
-    q.score = parseFloat(result.score) || 0;
-    q.explanation = result.explanation;
-    totalPoints += q.score;
+    const newScore = parseFloat(result.score) || 0;
 
-    showFeedback(q);
+    if (newScore >= q.bestScore) {
+      totalPoints += (newScore - q.bestScore);
+      q.bestScore = newScore;
+      q.score = newScore;
+      q.judgment = result.judgment;
+      q.explanation = result.explanation;
+      q.user_answer = userAnswer;
+    }
+    q.status = "graded";
+
+    let willRetry = false;
+    if (result.judgment === "incorrect" && q.retries < 2) {
+      q.retries++;
+      willRetry = true;
+      const insertAt = Math.min(queuePos + 3, queue.length);
+      queue.splice(insertAt, 0, currentIndex);
+    }
+
+    showFeedback({
+      judgment: result.judgment,
+      score: newScore,
+      explanation: result.explanation,
+      expected_answer: q.expected_answer,
+      willRetry,
+    });
   } catch (e) {
     showError(e.message);
     $("grading-section").classList.add("hidden");
@@ -550,7 +579,7 @@ async function submitAnswer(userAnswer) {
   }
 }
 
-function showFeedback(q) {
+function showFeedback(fb) {
   $("grading-section").classList.add("hidden");
 
   const judgmentLabels = {
@@ -559,18 +588,23 @@ function showFeedback(q) {
     incorrect: "Incorrect",
   };
 
+  const retryNote = fb.willRetry
+    ? `<p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">This question will come back later.</p>`
+    : "";
+
   $("feedback-section").innerHTML = `
-    <div class="feedback ${q.judgment}">
-      <p class="judgment-label">${judgmentLabels[q.judgment]} (${q.score} pt)</p>
-      <p class="explanation">${q.explanation}</p>
-      <p class="expected"><strong>Expected answer:</strong> ${q.expected_answer}</p>
+    <div class="feedback ${fb.judgment}">
+      <p class="judgment-label">${judgmentLabels[fb.judgment]} (${fb.score} pt)</p>
+      <p class="explanation">${fb.explanation}</p>
+      <p class="expected"><strong>Expected answer:</strong> ${fb.expected_answer}</p>
+      ${retryNote}
     </div>
   `;
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
   updateScore();
 
-  if (currentIndex >= questions.length - 1) {
+  if (queuePos >= queue.length - 1) {
     $("btn-next").textContent = "View Summary";
   }
 }
@@ -585,32 +619,48 @@ $("btn-skip").addEventListener("click", () => {
   }
 
   const q = questions[currentIndex];
-  q.status = "skipped";
-  q.user_answer = null;
-  q.judgment = null;
-  q.score = 0.0;
-  q.explanation = "Question skipped.";
+
+  let willRetry = false;
+  if (q.retries < 2) {
+    q.retries++;
+    willRetry = true;
+    const insertAt = Math.min(queuePos + 3, queue.length);
+    queue.splice(insertAt, 0, currentIndex);
+  }
+
+  if (q.status === "pending") {
+    q.status = "skipped";
+    q.user_answer = null;
+    q.judgment = null;
+    q.score = 0.0;
+    q.explanation = "Question skipped.";
+  }
+
+  const retryNote = willRetry
+    ? `<p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">This question will come back later.</p>`
+    : "";
 
   $("answer-section").classList.add("hidden");
   $("feedback-section").innerHTML = `
     <div class="feedback incorrect">
       <p class="judgment-label">Skipped (0 pt)</p>
       <p class="expected"><strong>Expected answer:</strong> ${q.expected_answer}</p>
+      ${retryNote}
     </div>
   `;
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
   updateScore();
 
-  if (currentIndex >= questions.length - 1) {
+  if (queuePos >= queue.length - 1) {
     $("btn-next").textContent = "View Summary";
   }
 });
 
 // --- Navigation ---
 $("btn-next").addEventListener("click", () => {
-  currentIndex++;
-  if (currentIndex >= questions.length) {
+  queuePos++;
+  if (queuePos >= queue.length) {
     showSummary();
   } else {
     showQuestion();
@@ -640,14 +690,16 @@ function showSummary() {
 
   const list = $("summary-list");
   list.innerHTML = questions.map((q, i) => {
+    const score = q.bestScore;
     const badgeClass = q.status === "skipped" ? "skipped" : (q.judgment || "incorrect");
-    const badgeLabel = q.score === 1 ? "1" : q.score === 0.5 ? ".5" : "0";
+    const badgeLabel = score === 1 ? "1" : score === 0.5 ? ".5" : "0";
+    const retryInfo = q.retries > 0 ? ` (${q.retries} ${q.retries === 1 ? "retry" : "retries"})` : "";
 
     return `
       <div class="summary-item">
         <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
         <div class="summary-detail">
-          <p class="q-text">${i + 1}. ${q.question}</p>
+          <p class="q-text">${i + 1}. ${q.question}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
           <p class="q-explanation">${q.explanation}</p>
         </div>
       </div>
@@ -657,6 +709,8 @@ function showSummary() {
 
 $("btn-restart").addEventListener("click", () => {
   questions = [];
+  queue = [];
+  queuePos = 0;
   currentIndex = 0;
   totalPoints = 0;
   $("file-input").value = "";

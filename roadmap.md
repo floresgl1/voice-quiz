@@ -23,9 +23,11 @@
 ## v1.1 — Retry Loop
 **Goal:** Let missed questions come back for another attempt.
 
-- Missed and partially correct questions re-enter the question pool
-- Define retry behavior: when retried questions appear, how grades update
-- Session ends when all questions are answered correctly or user quits
+- [x] Incorrect and skipped questions re-enter the queue (interleaved, not after a full pass)
+- [x] Max 2 retries per question
+- [x] Best score kept across attempts; totalPoints tracks the delta
+- [x] Session ends when queue is empty or user clicks "End Quiz"
+- [x] Retry indicator shown on retried questions; summary shows retry count
 
 ---
 
