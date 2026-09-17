@@ -258,6 +258,13 @@
             <button class="btn-record" id="btn-record">Record</button>
             <button class="btn-secondary" id="btn-skip">Skip</button>
           </div>
+          <div class="type-fallback" id="type-fallback">
+            <p class="label" style="margin-top: 1rem;">Or type your answer</p>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="typed-answer" placeholder="Type your answer here..." style="flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95rem;">
+              <button class="btn-primary" id="btn-submit-typed" disabled>Submit</button>
+            </div>
+          </div>
         </div>
 
         <div id="grading-section" class="hidden">
@@ -380,6 +387,8 @@ function showQuestion() {
   $("btn-record").classList.remove("recording");
   $("btn-record").disabled = false;
   $("btn-skip").disabled = false;
+  $("typed-answer").value = "";
+  $("btn-submit-typed").disabled = true;
 
   speak(q.question);
 }
@@ -426,7 +435,11 @@ function initRecognition() {
 
   rec.onerror = (event) => {
     if (event.error !== "aborted") {
-      showError(`Speech recognition error: ${event.error}`);
+      if (event.error === "network") {
+        showError("Speech recognition unavailable (network error). You can type your answer below instead.");
+      } else {
+        showError(`Speech recognition error: ${event.error}`);
+      }
     }
     stopRecording();
   };
@@ -480,6 +493,22 @@ $("btn-record").addEventListener("click", () => {
   } else {
     startRecording();
   }
+});
+
+// --- Typed answer fallback ---
+$("typed-answer").addEventListener("input", () => {
+  $("btn-submit-typed").disabled = !$("typed-answer").value.trim();
+});
+
+$("typed-answer").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && $("typed-answer").value.trim()) {
+    submitAnswer($("typed-answer").value.trim());
+  }
+});
+
+$("btn-submit-typed").addEventListener("click", () => {
+  const text = $("typed-answer").value.trim();
+  if (text) submitAnswer(text);
 });
 
 // --- Grading ---
