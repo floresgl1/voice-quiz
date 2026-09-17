@@ -9,7 +9,8 @@ Return ONLY a JSON array of question objects. Each object must have:
 - "difficulty": one of "easy", "medium", or "hard"
 
 Rules:
-- Questions should test understanding, not just recall
+- Prioritize conceptual questions that test understanding, reasoning, and application — ask "why," "how," "explain," "compare," "what would happen if"
+- Avoid pure recall questions like "list," "name," "define," or "what is X" — unless the concept genuinely requires a definition to demonstrate understanding
 - Vary the difficulty across questions
 - Each question should be answerable from the source material
 - Expected answers should be 1-3 sentences
