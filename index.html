@@ -538,7 +538,7 @@ async function submitAnswer(userAnswer) {
     const result = await res.json();
     q.status = "graded";
     q.judgment = result.judgment;
-    q.score = result.score;
+    q.score = parseFloat(result.score) || 0;
     q.explanation = result.explanation;
     totalPoints += q.score;
 
