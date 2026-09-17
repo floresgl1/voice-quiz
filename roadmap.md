@@ -37,6 +37,11 @@
 - Store per-question results (question, your answer, grade, explanation)
 - Review past sessions to identify weak areas
 
+### Multi-File Upload
+- Upload multiple files at once
+- Each file generates its own batch of questions (scaled per file)
+- Questions tagged by source file
+
 ### AI Quality Flagging
 - Flag a bad question (nonsensical or unanswerable) — skip and remove from pool
 - Flag bad grading (correct answer marked wrong, or vice versa) — override the grade
