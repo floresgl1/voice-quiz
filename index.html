@@ -263,6 +263,41 @@
       margin-top: 0.75rem;
     }
 
+    .session-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #e5e7eb;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .session-item:hover { background: #f9fafb; }
+    .session-item:last-child { border-bottom: none; }
+
+    .session-info { flex: 1; }
+
+    .session-info .session-file {
+      font-weight: 500;
+      margin-bottom: 0.15rem;
+    }
+
+    .session-info .session-date {
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+
+    .session-score {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #2563eb;
+    }
+
+    .session-score.incomplete {
+      color: #9ca3af;
+    }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -277,6 +312,7 @@
         <input type="file" id="file-input" accept=".pdf,.docx">
         <button class="btn-primary" id="btn-upload" disabled>Generate Quiz</button>
       </div>
+      <button class="btn-secondary" id="btn-history" style="width: 100%; margin-top: 0.5rem;">View History</button>
     </div>
 
     <!-- Loading Screen -->
@@ -345,6 +381,30 @@
       <button class="btn-primary" id="btn-restart" style="width: 100%; margin-top: 0.5rem;">Start New Quiz</button>
     </div>
 
+    <!-- History Screen -->
+    <div id="screen-history" class="hidden">
+      <div class="card">
+        <p class="label">Quiz History</p>
+        <div id="history-list">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading history...</p>
+          </div>
+        </div>
+      </div>
+      <button class="btn-secondary" id="btn-back-upload" style="width: 100%; margin-top: 0.5rem;">Back</button>
+    </div>
+
+    <!-- Session Detail Screen -->
+    <div id="screen-session-detail" class="hidden">
+      <div class="card">
+        <p class="label" id="detail-header">Session</p>
+        <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="detail-score"></p>
+        <div id="detail-list"></div>
+      </div>
+      <button class="btn-secondary" id="btn-back-history" style="width: 100%; margin-top: 0.5rem;">Back to History</button>
+    </div>
+
     <!-- Error display -->
     <div id="error-container" class="hidden">
       <div class="error-msg" id="error-msg"></div>
@@ -362,6 +422,7 @@ let queue = [];
 let queuePos = 0;
 let recognition = null;
 let isRecording = false;
+let sessionId = null;
 
 // --- DOM refs ---
 const $ = (id) => document.getElementById(id);
@@ -371,6 +432,8 @@ const screens = {
   loading: $("screen-loading"),
   quiz:    $("screen-quiz"),
   summary: $("screen-summary"),
+  history: $("screen-history"),
+  "session-detail": $("screen-session-detail"),
 };
 
 function showScreen(name) {
@@ -405,7 +468,9 @@ $("btn-upload").addEventListener("click", async () => {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || "Upload failed");
     }
-    questions = await res.json();
+    const data = await res.json();
+    sessionId = data.session_id;
+    questions = data.questions;
     questions.forEach(q => {
       q.status = "pending";
       q.retries = 0;
@@ -455,6 +520,15 @@ function showQuestion() {
 function updateScore() {
   const maxPoints = questions.length;
   $("score").textContent = `${totalPoints} / ${maxPoints} points`;
+}
+
+function persistScore() {
+  if (!sessionId) return;
+  fetch(`${API}/update-score`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, total_points: totalPoints }),
+  }).catch(() => {});
 }
 
 // --- TTS ---
@@ -586,6 +660,9 @@ async function submitAnswer(userAnswer) {
         question: q.question,
         expected_answer: q.expected_answer,
         user_answer: userAnswer,
+        session_id: sessionId,
+        question_db_id: q.db_id,
+        attempt_num: q.attempts.length,
       }),
     });
 
@@ -606,6 +683,8 @@ async function submitAnswer(userAnswer) {
       q.user_answer = userAnswer;
     }
     q.status = "graded";
+
+    persistScore();
 
     let willRetry = false;
     if (result.judgment === "incorrect" && q.retries < 2) {
@@ -734,6 +813,18 @@ $("btn-skip").addEventListener("click", () => {
 
   const q = questions[currentIndex];
 
+  if (sessionId && q.db_id) {
+    fetch(`${API}/skip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        question_db_id: q.db_id,
+        attempt_num: q.attempts.length + 1,
+      }),
+    }).catch(() => {});
+  }
+
   let willRetry = false;
   if (q.retries < 2) {
     q.retries++;
@@ -799,6 +890,14 @@ function showSummary() {
   window.speechSynthesis.cancel();
   showScreen("summary");
 
+  if (sessionId) {
+    fetch(`${API}/complete-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, total_points: totalPoints }),
+    }).catch(() => {});
+  }
+
   const maxPoints = questions.length;
   $("final-score").textContent = `${totalPoints} / ${maxPoints} points`;
 
@@ -827,9 +926,104 @@ $("btn-restart").addEventListener("click", () => {
   queuePos = 0;
   currentIndex = 0;
   totalPoints = 0;
+  sessionId = null;
   $("file-input").value = "";
   $("btn-upload").disabled = true;
   showScreen("upload");
+});
+
+// --- History ---
+$("btn-history").addEventListener("click", async () => {
+  showScreen("history");
+  $("history-list").innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading history...</p></div>`;
+
+  try {
+    const res = await fetch(`${API}/sessions`);
+    if (!res.ok) throw new Error("Failed to load history");
+    const sessions = await res.json();
+
+    if (sessions.length === 0) {
+      $("history-list").innerHTML = `<p style="color: #6b7280; text-align: center; padding: 1rem;">No quiz sessions yet. Take a quiz first!</p>`;
+      return;
+    }
+
+    $("history-list").innerHTML = sessions.map(s => {
+      const date = new Date(s.created_at).toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+        hour: "numeric", minute: "2-digit",
+      });
+      const scoreClass = s.completed ? "" : "incomplete";
+      const scoreLabel = s.completed
+        ? `${s.total_points} / ${s.max_points}`
+        : `In progress`;
+
+      return `
+        <div class="session-item" data-sid="${s.id}">
+          <div class="session-info">
+            <p class="session-file">${s.source_file}</p>
+            <p class="session-date">${date}</p>
+          </div>
+          <span class="session-score ${scoreClass}">${scoreLabel}</span>
+        </div>
+      `;
+    }).join("");
+
+    $("history-list").querySelectorAll(".session-item").forEach(el => {
+      el.addEventListener("click", () => showSessionDetail(parseInt(el.dataset.sid)));
+    });
+  } catch (err) {
+    showError(err.message);
+    $("history-list").innerHTML = `<p style="color: #dc2626; text-align: center; padding: 1rem;">Failed to load history.</p>`;
+  }
+});
+
+$("btn-back-upload").addEventListener("click", () => showScreen("upload"));
+
+// --- Session Detail ---
+async function showSessionDetail(sid) {
+  showScreen("session-detail");
+  $("detail-header").textContent = "Loading...";
+  $("detail-score").textContent = "";
+  $("detail-list").innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
+
+  try {
+    const res = await fetch(`${API}/sessions/${sid}`);
+    if (!res.ok) throw new Error("Failed to load session");
+    const detail = await res.json();
+
+    $("detail-header").textContent = detail.source_file;
+    $("detail-score").textContent = `${detail.total_points} / ${detail.max_points} points`;
+
+    $("detail-list").innerHTML = detail.questions.map((q, i) => {
+      const bestScore = q.best_score;
+      const lastAttempt = q.attempts.length > 0 ? q.attempts[q.attempts.length - 1] : null;
+      const judgment = lastAttempt ? lastAttempt.judgment : "skipped";
+      const badgeClass = judgment === "skipped" ? "skipped"
+        : bestScore >= 1 ? "correct"
+        : bestScore >= 0.5 ? "partially_correct"
+        : "incorrect";
+      const badgeLabel = bestScore === 1 ? "1" : bestScore === 0.5 ? ".5" : "0";
+      const retryInfo = q.attempts.length > 1 ? ` (${q.attempts.length - 1} ${q.attempts.length - 1 === 1 ? "retry" : "retries"})` : "";
+      const explanation = lastAttempt && lastAttempt.explanation ? lastAttempt.explanation : (judgment === "skipped" ? "Question skipped." : "");
+
+      return `
+        <div class="summary-item">
+          <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
+          <div class="summary-detail">
+            <p class="q-text">${i + 1}. ${q.question}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
+            <p class="q-explanation">${explanation}</p>
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    showError(err.message);
+    showScreen("history");
+  }
+}
+
+$("btn-back-history").addEventListener("click", () => {
+  $("btn-history").click();
 });
 </script>
 </body>

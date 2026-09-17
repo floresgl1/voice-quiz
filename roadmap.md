@@ -42,27 +42,48 @@
 
 ---
 
-## v2 — Persistence & Quality Control
-**Goal:** Remember what happened and catch AI mistakes.
+## v2.0 — Persistence Foundation
+**Goal:** Add SQLite so session results survive a browser refresh and can be reviewed later.
 
-### Tracking & History
-- Store session results (date, source file, score)
-- Store per-question results (question, your answer, grade, explanation)
-- Review past sessions to identify weak areas
+- [ ] New `database.py` — plain `sqlite3`, no ORM. DB at `./data/voicequiz.db`
+- [ ] Schema: `sessions`, `questions`, `attempts` tables
+- [ ] `POST /upload` returns a `session_id`; stores session + questions in DB
+- [ ] `POST /grade` accepts `session_id` + `question_id`, writes attempt row
+- [ ] `GET /sessions` — list past sessions (date, source file, score)
+- [ ] `GET /sessions/{id}` — full session detail with per-question results
+- [ ] Frontend sends `session_id` with grading/explain requests
+- [ ] "History" button on upload screen → session list view
 
-### Multi-File Upload
-- Upload multiple files at once
-- Each file generates its own batch of questions (scaled per file)
-- Questions tagged by source file
+---
 
-### AI Quality Flagging
-- Flag a bad question (nonsensical or unanswerable) — skip and remove from pool
-- Flag bad grading (correct answer marked wrong, or vice versa) — override the grade
-- Save flags for review to improve generation/grading prompts over time
+## v2.1 — Multi-File Upload
+**Goal:** Accept multiple files and tag questions by source.
 
-### Question Editing
-- Review and tweak AI-generated questions before quizzing
-- Edit question text or expected answers
+- [ ] `POST /upload` accepts multiple files (processed sequentially)
+- [ ] `source_file` column on questions table
+- [ ] Frontend file input gets `multiple` attribute; button shows file count
+- [ ] Score bar shows source file label on current question
+- [ ] Summary groups/tags results by source file
+
+---
+
+## v2.2 — AI Quality Flagging
+**Goal:** Let the user flag bad questions or bad grading during a quiz.
+
+- [ ] "Flag Question" button — removes from queue, doesn't count against score
+- [ ] "Flag Grading" button — user overrides grade, score recalculated
+- [ ] `flags` table + `POST /flag` and `GET /flags` endpoints
+- [ ] Flagged questions visually distinct in summary
+
+---
+
+## v2.3 — Question Editing
+**Goal:** Review and tweak AI-generated questions before starting the quiz.
+
+- [ ] "Review Questions" screen between upload and quiz (with "Skip Review" option)
+- [ ] Editable cards: question text, expected answer, topic, difficulty
+- [ ] Can delete a question (adjusts max_points)
+- [ ] `PUT` and `DELETE` endpoints for questions
 
 ---
 

@@ -27,16 +27,23 @@ Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY`. Optionally set `CLAUD
 
 ## Architecture
 
-The backend is stateless — all session state (question pool, scores, current index) lives in the frontend JavaScript.
+Session results are persisted in SQLite (`./data/voicequiz.db`) via `database.py`. Quiz-time state (queue position, current question) lives in the frontend JavaScript; the DB stores sessions, questions, and grading attempts for history.
 
 **Request flow:**
 
-1. `POST /upload` — accepts PDF/DOCX, extracts text (`extraction.py`), sends to Claude to generate questions (`claude_client.py` using prompt from `prompts.py`), returns JSON array of question objects
-2. `POST /grade` — accepts question + expected answer + user answer, sends to Claude for grading, returns `{judgment, score, explanation}`
-3. `POST /explain` — accepts question + expected answer + user attempts, sends to Claude for a teaching-style concept breakdown (plain text, not JSON)
-4. `GET /` — serves `index.html`
+1. `POST /upload` — accepts PDF/DOCX, extracts text (`extraction.py`), sends to Claude to generate questions (`claude_client.py` using prompt from `prompts.py`), stores session + questions in SQLite, returns `{session_id, questions}`
+2. `POST /grade` — accepts question + expected answer + user answer (+ optional session_id, question_db_id, attempt_num), sends to Claude for grading, persists attempt to DB, returns `{judgment, score, explanation}`
+3. `POST /skip` — records a skipped attempt in the DB
+4. `POST /update-score` — updates session total_points in the DB
+5. `POST /complete-session` — marks session as completed in the DB
+6. `POST /explain` — accepts question + expected answer + user attempts, sends to Claude for a teaching-style concept breakdown (plain text, not JSON)
+7. `GET /sessions` — list past quiz sessions (date, source file, score)
+8. `GET /sessions/{id}` — full session detail with per-question results and attempts
+9. `GET /` — serves `index.html`
 
 **Frontend state machine:** upload → loading → quiz → summary. TTS uses browser `SpeechSynthesis`, STT uses browser `SpeechRecognition` (Chrome only).
+
+**Persistence** is handled by `database.py` — plain `sqlite3`, no ORM. Tables: `sessions`, `questions`, `attempts`. DB auto-created on startup via `init_db()`.
 
 **Claude API calls** go through `claude_client.py`, which handles response parsing. Claude sometimes wraps JSON in markdown code blocks — `_parse_json()` handles both raw JSON and fenced blocks.
 
@@ -46,7 +53,7 @@ The backend is stateless — all session state (question pool, scores, current i
 
 Question object (backend returns, frontend augments during quiz):
 - Backend fields: `id`, `question`, `expected_answer`, `topic`, `difficulty`
-- Frontend adds: `status` (pending/graded/skipped), `user_answer`, `judgment`, `score`, `explanation`, `retries`, `bestScore`, `attempts[]`
+- Frontend adds: `status` (pending/graded/skipped), `user_answer`, `judgment`, `score`, `explanation`, `retries`, `bestScore`, `attempts[]`, `db_id` (from server)
 
 Score model: 1.0 (correct), 0.5 (partially correct), 0.0 (incorrect/skipped). Displayed as points.
 
@@ -57,4 +64,5 @@ Score model: 1.0 (correct), 0.5 (partially correct), 0.0 (incorrect/skipped). Di
 - `expected_answer` is sent to the frontend in the question object (visible in DevTools — acceptable for a personal study tool)
 - v1.1 retry loop: incorrect/skipped questions re-enter the queue (interleaved, max 2 retries, best score kept)
 - v1.2 concept explainer: after exhausting retries, "Help me understand" calls `/explain` for a teaching breakdown with code examples
+- v2.0 persistence: SQLite stores sessions, questions, and attempts; history view lets user review past quizzes
 - See `requirements.md` for full v1 spec and `roadmap.md` for version planning
