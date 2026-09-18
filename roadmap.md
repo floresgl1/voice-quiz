@@ -87,14 +87,49 @@
 
 ---
 
-## Future (unscoped)
-- Rich question formatting (render formulas, symbols, and code snippets properly — e.g., KaTeX for math, inline code styling)
-- User accounts / multi-user support
-- Spaced repetition (resurface questions you got wrong days later)
-- Multiple answer modes (multiple choice, typed, voice)
-- Custom voice selection and speech rate
-- Deployment / hosting
-- GitHub repo ingestion (paste a URL, filter relevant files, chunk for LLM context)
-- Configurable question count
-- Export / share session results
-- Re-quiz from the same source with fresh questions
+## v3 — Quiz Customization & UX Polish
+**Goal:** Make daily study sessions smoother with more control and better ergonomics.
+
+- [ ] Configurable question count
+- [ ] Custom voice selection and speech rate
+- [ ] Multiple answer modes (multiple choice, typed, voice)
+- [ ] Difficulty filter — pick easy/medium/hard before starting
+- [ ] Topic filter — select which topics to quiz on from the review screen
+- [ ] Keyboard shortcuts — spacebar to start/stop recording, arrow keys to navigate, Enter to submit
+- [ ] Progress persistence — resume an interrupted quiz where you left off (session state in DB)
+- [ ] Dark mode
+
+---
+
+## v4 — Content Sources
+**Goal:** Expand what you can quiz on beyond uploaded files.
+
+- [ ] YouTube transcript ingestion — paste a URL, pull the transcript, generate questions
+- [ ] GitHub repo ingestion (paste a URL, filter relevant files, chunk for LLM context)
+- [ ] Plain text / paste input — skip file upload, just paste notes or text
+- [ ] Re-quiz from the same source with fresh questions
+
+---
+
+## v5 — Rich Display
+**Goal:** Render technical content properly in questions and explanations.
+
+- [ ] Rich question formatting (KaTeX for math, inline code styling)
+- [ ] Code syntax highlighting (Prism.js or highlight.js)
+
+---
+
+## v6 — Export & Sharing
+**Goal:** Share results and open the app to others.
+
+- [ ] Export / share session results
+- [ ] PDF export of session results — printable study review sheet
+- [ ] Deployment / hosting
+- [ ] User accounts / multi-user support
+
+---
+
+## v7 — Long-Term Learning
+**Goal:** Build a study system that tracks knowledge over time.
+
+- [ ] Spaced repetition (resurface questions you got wrong days later)

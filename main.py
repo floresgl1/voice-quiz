@@ -47,7 +47,8 @@ def health():
 
 
 @app.post("/upload")
-async def upload(files: list[UploadFile] = File(...)):
+async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(10)):
+    num_questions = max(1, min(30, num_questions))
     all_questions = []
     warnings = []
     source_names = []
@@ -66,7 +67,7 @@ async def upload(files: list[UploadFile] = File(...)):
             continue
 
         try:
-            questions = generate_questions(text)
+            questions = generate_questions(text, num_questions)
         except ValueError as e:
             log.exception("Failed to parse generated questions for %s", filename)
             warnings.append(f"{filename}: failed to generate questions")

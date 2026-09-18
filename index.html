@@ -432,6 +432,103 @@
       margin-bottom: 0.15rem;
     }
 
+    .filter-section {
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      background: #f9fafb;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .filter-section p {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .filter-chip {
+      font-size: 0.8rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-chip.active {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+
+    .filter-chip:hover {
+      border-color: #9ca3af;
+    }
+
+    .filter-count {
+      font-size: 0.85rem;
+      color: #6b7280;
+      margin-top: 0.5rem;
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      font-size: 0.85rem;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 0.4rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .settings-toggle:hover { color: #374151; }
+
+    .settings-panel {
+      margin-top: 0.5rem;
+      padding: 0.75rem 1rem;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+    }
+
+    .settings-panel label {
+      font-size: 0.8rem;
+      color: #6b7280;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .settings-panel select, .settings-panel input[type="range"] {
+      width: 100%;
+      margin-bottom: 0.75rem;
+    }
+
+    .settings-panel select {
+      padding: 0.4rem 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+
+    .speed-display {
+      font-size: 0.8rem;
+      color: #374151;
+      text-align: center;
+    }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -444,7 +541,19 @@
       <div class="card">
         <p class="label">Upload study files</p>
         <input type="file" id="file-input" accept=".pdf,.docx" multiple>
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0;">
+          <label for="num-questions" style="font-size: 0.85rem; color: #6b7280; white-space: nowrap;">Questions:</label>
+          <input type="number" id="num-questions" value="10" min="1" max="30" style="width: 4rem; padding: 0.4rem 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; text-align: center;">
+        </div>
         <button class="btn-primary" id="btn-upload" disabled>Generate Quiz</button>
+      </div>
+      <button class="settings-toggle" id="btn-settings-toggle">&#9881; Voice Settings</button>
+      <div id="settings-panel" class="settings-panel hidden">
+        <label for="voice-select">Voice</label>
+        <select id="voice-select"><option>Loading voices...</option></select>
+        <label for="speed-slider">Speed: <span id="speed-value">1.0x</span></label>
+        <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+        <button class="btn-secondary" id="btn-preview-voice" style="width: 100%; padding: 0.4rem; font-size: 0.8rem; margin-top: 0.25rem;">Preview Voice</button>
       </div>
       <button class="btn-secondary" id="btn-history" style="width: 100%; margin-top: 0.5rem;">View History</button>
     </div>
@@ -465,6 +574,8 @@
         <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1rem;">Edit or remove questions before starting the quiz.</p>
         <div id="review-list"></div>
       </div>
+      <div id="review-filters"></div>
+      <p id="filter-count" class="filter-count"></p>
       <div class="btn-row">
         <button class="btn-primary" id="btn-start-quiz" style="flex: 1;">Start Quiz</button>
         <button class="btn-secondary" id="btn-cancel-review">Cancel</button>
@@ -618,6 +729,7 @@ $("btn-upload").addEventListener("click", async () => {
   for (const file of fileList) {
     form.append("files", file);
   }
+  form.append("num_questions", $("num-questions").value);
 
   try {
     const res = await fetch(`${API}/upload`, { method: "POST", body: form });
@@ -649,10 +761,75 @@ $("btn-upload").addEventListener("click", async () => {
 });
 
 // --- Review ---
+let activeFilters = { difficulties: new Set(), topics: new Set() };
+
 function showReview() {
   showScreen("review");
   $("review-count").textContent = `(${questions.length})`;
   renderReviewList();
+  renderFilters();
+}
+
+function renderFilters() {
+  const difficulties = [...new Set(questions.map(q => q.difficulty).filter(Boolean))];
+  const topics = [...new Set(questions.map(q => q.topic).filter(Boolean))];
+
+  activeFilters.difficulties = new Set(difficulties);
+  activeFilters.topics = new Set(topics);
+
+  let html = "";
+
+  if (difficulties.length > 0) {
+    html += `<div class="filter-section"><p>Difficulty</p><div class="filter-chips" id="diff-chips">`;
+    html += difficulties.map(d => `<button class="filter-chip active" data-filter="difficulty" data-value="${d}">${d}</button>`).join("");
+    html += `</div></div>`;
+  }
+
+  if (topics.length > 0) {
+    html += `<div class="filter-section"><p>Topics</p><div class="filter-chips" id="topic-chips">`;
+    html += topics.map(t => `<button class="filter-chip active" data-filter="topic" data-value="${t}">${t}</button>`).join("");
+    html += `</div></div>`;
+  }
+
+  $("review-filters").innerHTML = html;
+  updateFilterCount();
+
+  $("review-filters").querySelectorAll(".filter-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const filterType = chip.dataset.filter;
+      const value = chip.dataset.value;
+      const set = filterType === "difficulty" ? activeFilters.difficulties : activeFilters.topics;
+
+      if (set.has(value)) {
+        set.delete(value);
+        chip.classList.remove("active");
+      } else {
+        set.add(value);
+        chip.classList.add("active");
+      }
+      updateFilterCount();
+    });
+  });
+}
+
+function getFilteredIndices() {
+  return questions.reduce((acc, q, i) => {
+    const diffMatch = !q.difficulty || activeFilters.difficulties.has(q.difficulty);
+    const topicMatch = !q.topic || activeFilters.topics.has(q.topic);
+    if (diffMatch && topicMatch) acc.push(i);
+    return acc;
+  }, []);
+}
+
+function updateFilterCount() {
+  const filtered = getFilteredIndices().length;
+  const total = questions.length;
+  if (filtered === total) {
+    $("filter-count").textContent = "";
+  } else {
+    $("filter-count").textContent = `Starting quiz with ${filtered} of ${total} questions`;
+  }
+  $("btn-start-quiz").disabled = filtered === 0;
 }
 
 function renderReviewList() {
@@ -757,11 +934,12 @@ function renderReviewList() {
 }
 
 $("btn-start-quiz").addEventListener("click", () => {
-  if (questions.length === 0) {
-    showError("No questions to quiz on. Add files or go back.");
+  const filtered = getFilteredIndices();
+  if (filtered.length === 0) {
+    showError("No questions match your filters.");
     return;
   }
-  queue = questions.map((_, i) => i);
+  queue = filtered;
   queuePos = 0;
   startQuiz();
 });
@@ -820,9 +998,60 @@ function persistScore() {
 }
 
 // --- TTS ---
+// --- Voice Settings ---
+let selectedVoice = null;
+let speechRate = 1.0;
+
+function loadVoiceSettings() {
+  try {
+    const saved = localStorage.getItem("vq-speech-rate");
+    if (saved) { speechRate = parseFloat(saved); $("speed-slider").value = speechRate; $("speed-value").textContent = speechRate.toFixed(1) + "x"; }
+  } catch(e) {}
+}
+
+function populateVoices() {
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return;
+  const select = $("voice-select");
+  const savedName = (() => { try { return localStorage.getItem("vq-voice"); } catch(e) { return null; } })();
+  select.innerHTML = voices.map((v, i) => `<option value="${i}"${v.name === savedName ? " selected" : ""}>${v.name} (${v.lang})</option>`).join("");
+  const selectedIdx = select.value;
+  selectedVoice = voices[parseInt(selectedIdx)] || null;
+  select.addEventListener("change", () => {
+    selectedVoice = voices[parseInt(select.value)] || null;
+    try { localStorage.setItem("vq-voice", selectedVoice?.name || ""); } catch(e) {}
+  });
+}
+
+speechSynthesis.addEventListener("voiceschanged", populateVoices);
+populateVoices();
+
+$("speed-slider").addEventListener("input", (e) => {
+  speechRate = parseFloat(e.target.value);
+  $("speed-value").textContent = speechRate.toFixed(1) + "x";
+  try { localStorage.setItem("vq-speech-rate", speechRate); } catch(e) {}
+});
+
+$("btn-settings-toggle").addEventListener("click", () => {
+  $("settings-panel").classList.toggle("hidden");
+});
+
+$("btn-preview-voice").addEventListener("click", () => {
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance("This is how your quiz questions will sound.");
+  if (selectedVoice) utterance.voice = selectedVoice;
+  utterance.rate = speechRate;
+  window.speechSynthesis.speak(utterance);
+});
+
+loadVoiceSettings();
+
+// --- TTS ---
 function speak(text) {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
+  if (selectedVoice) utterance.voice = selectedVoice;
+  utterance.rate = speechRate;
   window.speechSynthesis.speak(utterance);
 }
 

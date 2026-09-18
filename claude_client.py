@@ -11,8 +11,8 @@ MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 client = anthropic.Anthropic()
 
 
-def generate_questions(source_text: str) -> list[dict]:
-    prompt = build_generation_prompt(source_text)
+def generate_questions(source_text: str, num_questions: int = 10) -> list[dict]:
+    prompt = build_generation_prompt(source_text, num_questions)
 
     response = client.messages.create(
         model=MODEL,
