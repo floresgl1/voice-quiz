@@ -5,12 +5,80 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Voice Quiz</title>
   <style>
+    :root {
+      --bg: #f5f5f5;
+      --text: #1a1a1a;
+      --text-secondary: #374151;
+      --text-muted: #6b7280;
+      --text-faint: #9ca3af;
+      --card-bg: #fff;
+      --card-shadow: rgba(0,0,0,0.1);
+      --border: #e5e7eb;
+      --border-input: #d1d5db;
+      --surface: #f9fafb;
+      --surface-alt: #f3f4f6;
+      --primary: #2563eb;
+      --primary-hover: #eff6ff;
+      --btn-secondary-bg: #e5e7eb;
+      --danger: #dc2626;
+      --warning: #f59e0b;
+      --success: #16a34a;
+      --success-bg: #dcfce7;
+      --partial-color: #ca8a04;
+      --partial-bg: #fef9c3;
+      --error-bg: #fee2e2;
+      --explain-bg: #eff6ff;
+      --explain-border: #bfdbfe;
+      --explain-title: #1d4ed8;
+      --code-bg: #f1f5f9;
+      --pre-bg: #1e293b;
+      --pre-text: #e2e8f0;
+      --spinner-track: #e5e7eb;
+      --key-badge-bg: #f3f4f6;
+      --key-badge-border: #e5e7eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #111827;
+        --text: #f3f4f6;
+        --text-secondary: #d1d5db;
+        --text-muted: #9ca3af;
+        --text-faint: #6b7280;
+        --card-bg: #1f2937;
+        --card-shadow: rgba(0,0,0,0.3);
+        --border: #374151;
+        --border-input: #4b5563;
+        --surface: #1f2937;
+        --surface-alt: #374151;
+        --primary: #3b82f6;
+        --primary-hover: #1e3a5f;
+        --btn-secondary-bg: #374151;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --success: #22c55e;
+        --success-bg: #14532d;
+        --partial-color: #eab308;
+        --partial-bg: #422006;
+        --error-bg: #450a0a;
+        --explain-bg: #1e3a5f;
+        --explain-border: #1e40af;
+        --explain-title: #60a5fa;
+        --code-bg: #374151;
+        --pre-bg: #0f172a;
+        --pre-text: #e2e8f0;
+        --spinner-track: #374151;
+        --key-badge-bg: #374151;
+        --key-badge-border: #4b5563;
+      }
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      background: #f5f5f5;
-      color: #1a1a1a;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
       justify-content: center;
@@ -29,10 +97,10 @@
     }
 
     .card {
-      background: #fff;
+      background: var(--card-bg);
       border-radius: 12px;
       padding: 1.5rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px var(--card-shadow);
       margin-bottom: 1rem;
     }
 
@@ -49,17 +117,17 @@
     button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .btn-primary {
-      background: #2563eb;
+      background: var(--primary);
       color: #fff;
     }
 
     .btn-secondary {
-      background: #e5e7eb;
-      color: #1a1a1a;
+      background: var(--btn-secondary-bg);
+      color: var(--text);
     }
 
     .btn-record {
-      background: #dc2626;
+      background: var(--danger);
       color: #fff;
     }
 
@@ -88,25 +156,25 @@
       justify-content: space-between;
       align-items: center;
       padding: 0.75rem 1rem;
-      background: #fff;
+      background: var(--card-bg);
       border-radius: 8px;
       margin-bottom: 1rem;
       font-size: 0.9rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px var(--card-shadow);
     }
 
     .loading {
       text-align: center;
       padding: 2rem;
-      color: #6b7280;
+      color: var(--text-muted);
     }
 
     .spinner {
       display: inline-block;
       width: 24px;
       height: 24px;
-      border: 3px solid #e5e7eb;
-      border-top-color: #2563eb;
+      border: 3px solid var(--spinner-track);
+      border-top-color: var(--primary);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       margin-bottom: 0.75rem;
@@ -127,18 +195,18 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #6b7280;
+      color: var(--text-muted);
       margin-bottom: 0.25rem;
     }
 
     .transcript {
       padding: 0.75rem;
-      background: #f9fafb;
+      background: var(--surface);
       border-radius: 8px;
       min-height: 2.5rem;
       margin-bottom: 1rem;
       font-style: italic;
-      color: #374151;
+      color: var(--text-secondary);
     }
 
     .feedback {
@@ -147,9 +215,9 @@
       margin-top: 1rem;
     }
 
-    .feedback.correct { background: #dcfce7; }
-    .feedback.partially_correct { background: #fef9c3; }
-    .feedback.incorrect { background: #fee2e2; }
+    .feedback.correct { background: var(--success-bg); }
+    .feedback.partially_correct { background: var(--partial-bg); }
+    .feedback.incorrect { background: var(--error-bg); }
 
     .feedback .judgment-label {
       font-weight: 700;
@@ -162,12 +230,12 @@
 
     .feedback .expected {
       font-size: 0.9rem;
-      color: #374151;
+      color: var(--text-secondary);
     }
 
     .error-msg {
-      color: #dc2626;
-      background: #fee2e2;
+      color: var(--danger);
+      background: var(--error-bg);
       padding: 0.75rem 1rem;
       border-radius: 8px;
       margin-bottom: 1rem;
@@ -177,7 +245,7 @@
       display: flex;
       gap: 0.75rem;
       padding: 0.75rem 0;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 1px solid var(--border);
     }
 
     .summary-item:last-child { border-bottom: none; }
@@ -195,10 +263,10 @@
       color: #fff;
     }
 
-    .summary-badge.correct { background: #16a34a; }
-    .summary-badge.partially_correct { background: #ca8a04; }
-    .summary-badge.incorrect { background: #dc2626; }
-    .summary-badge.skipped { background: #9ca3af; }
+    .summary-badge.correct { background: var(--success); }
+    .summary-badge.partially_correct { background: var(--partial-color); }
+    .summary-badge.incorrect { background: var(--danger); }
+    .summary-badge.skipped { background: var(--text-faint); }
 
     .summary-detail {
       flex: 1;
@@ -212,20 +280,20 @@
 
     .summary-detail .q-explanation {
       font-size: 0.85rem;
-      color: #6b7280;
+      color: var(--text-muted);
     }
 
     .explain-section {
       margin-top: 1rem;
       padding: 1rem;
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
+      background: var(--explain-bg);
+      border: 1px solid var(--explain-border);
       border-radius: 8px;
     }
 
     .explain-section .explain-title {
       font-weight: 700;
-      color: #1d4ed8;
+      color: var(--explain-title);
       margin-bottom: 0.75rem;
     }
 
@@ -235,15 +303,15 @@
     }
 
     .explain-section .explain-body code {
-      background: #f1f5f9;
+      background: var(--code-bg);
       padding: 0.15rem 0.35rem;
       border-radius: 4px;
       font-size: 0.9em;
     }
 
     .explain-section .explain-body pre {
-      background: #1e293b;
-      color: #e2e8f0;
+      background: var(--pre-bg);
+      color: var(--pre-text);
       padding: 0.75rem 1rem;
       border-radius: 8px;
       overflow-x: auto;
@@ -258,19 +326,19 @@
     }
 
     .btn-explain {
-      background: #3b82f6;
+      background: var(--primary);
       color: #fff;
       margin-top: 0.75rem;
     }
 
     .btn-flag {
-      background: #f59e0b;
+      background: var(--warning);
       color: #fff;
       font-size: 0.85rem;
     }
 
     .btn-flag-grading {
-      background: #f59e0b;
+      background: var(--warning);
       color: #fff;
       margin-top: 0.75rem;
       font-size: 0.85rem;
@@ -283,7 +351,7 @@
 
     .flag-badge {
       font-size: 0.75rem;
-      color: #f59e0b;
+      color: var(--warning);
       font-weight: 600;
       margin-left: 0.5rem;
     }
@@ -293,12 +361,12 @@
       justify-content: space-between;
       align-items: center;
       padding: 0.75rem 0;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 1px solid var(--border);
       cursor: pointer;
       transition: background 0.1s;
     }
 
-    .session-item:hover { background: #f9fafb; }
+    .session-item:hover { background: var(--surface); }
     .session-item:last-child { border-bottom: none; }
 
     .session-info { flex: 1; }
@@ -310,22 +378,22 @@
 
     .session-info .session-date {
       font-size: 0.8rem;
-      color: #6b7280;
+      color: var(--text-muted);
     }
 
     .session-score {
       font-weight: 700;
       font-size: 0.95rem;
-      color: #2563eb;
+      color: var(--primary);
     }
 
     .session-score.incomplete {
-      color: #9ca3af;
+      color: var(--text-faint);
     }
 
     .review-card {
-      background: #fff;
-      border: 1px solid #e5e7eb;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 0.75rem 1rem;
       margin-bottom: 0.5rem;
@@ -341,7 +409,7 @@
       flex-shrink: 0;
       font-size: 0.8rem;
       font-weight: 700;
-      color: #6b7280;
+      color: var(--text-muted);
       padding-top: 0.1rem;
     }
 
@@ -353,7 +421,7 @@
     .review-q-text {
       font-size: 0.9rem;
       line-height: 1.4;
-      color: #1a1a1a;
+      color: var(--text);
     }
 
     .review-meta {
@@ -366,8 +434,8 @@
       font-size: 0.7rem;
       padding: 0.1rem 0.4rem;
       border-radius: 4px;
-      background: #f3f4f6;
-      color: #6b7280;
+      background: var(--surface-alt);
+      color: var(--text-muted);
     }
 
     .review-actions {
@@ -385,26 +453,28 @@
       border-radius: 4px;
     }
 
-    .btn-edit-q { color: #2563eb; }
-    .btn-edit-q:hover { background: #eff6ff; }
-    .btn-delete-q { color: #dc2626; }
-    .btn-delete-q:hover { background: #fee2e2; }
+    .btn-edit-q { color: var(--primary); }
+    .btn-edit-q:hover { background: var(--primary-hover); }
+    .btn-delete-q { color: var(--danger); }
+    .btn-delete-q:hover { background: var(--error-bg); }
 
     .review-edit {
       margin-top: 0.75rem;
       padding-top: 0.75rem;
-      border-top: 1px solid #f3f4f6;
+      border-top: 1px solid var(--surface-alt);
     }
 
     .review-edit textarea, .review-edit input[type="text"] {
       width: 100%;
       padding: 0.5rem 0.75rem;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border-input);
       border-radius: 6px;
       font-size: 0.85rem;
       font-family: inherit;
       margin-bottom: 0.5rem;
       resize: vertical;
+      background: var(--card-bg);
+      color: var(--text);
     }
 
     .review-edit .review-row {
@@ -418,16 +488,17 @@
 
     .review-edit select {
       padding: 0.5rem 0.75rem;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border-input);
       border-radius: 6px;
       font-size: 0.85rem;
-      background: #fff;
+      background: var(--card-bg);
+      color: var(--text);
     }
 
     .review-edit .edit-label {
       font-size: 0.7rem;
       font-weight: 600;
-      color: #9ca3af;
+      color: var(--text-faint);
       text-transform: uppercase;
       margin-bottom: 0.15rem;
     }
@@ -435,15 +506,15 @@
     .filter-section {
       margin-bottom: 1rem;
       padding: 0.75rem 1rem;
-      background: #f9fafb;
+      background: var(--surface);
       border-radius: 8px;
-      border: 1px solid #e5e7eb;
+      border: 1px solid var(--border);
     }
 
     .filter-section p {
       font-size: 0.7rem;
       font-weight: 600;
-      color: #9ca3af;
+      color: var(--text-faint);
       text-transform: uppercase;
       margin-bottom: 0.4rem;
     }
@@ -458,26 +529,26 @@
       font-size: 0.8rem;
       padding: 0.25rem 0.65rem;
       border-radius: 999px;
-      border: 1px solid #d1d5db;
-      background: #fff;
-      color: #374151;
+      border: 1px solid var(--border-input);
+      background: var(--card-bg);
+      color: var(--text-secondary);
       cursor: pointer;
       transition: all 0.15s;
     }
 
     .filter-chip.active {
-      background: #2563eb;
+      background: var(--primary);
       color: #fff;
-      border-color: #2563eb;
+      border-color: var(--primary);
     }
 
     .filter-chip:hover {
-      border-color: #9ca3af;
+      border-color: var(--text-faint);
     }
 
     .filter-count {
       font-size: 0.85rem;
-      color: #6b7280;
+      color: var(--text-muted);
       margin-top: 0.5rem;
     }
 
@@ -485,7 +556,7 @@
       background: none;
       border: none;
       font-size: 0.85rem;
-      color: #6b7280;
+      color: var(--text-muted);
       cursor: pointer;
       padding: 0.4rem 0;
       display: flex;
@@ -493,19 +564,19 @@
       gap: 0.35rem;
     }
 
-    .settings-toggle:hover { color: #374151; }
+    .settings-toggle:hover { color: var(--text-secondary); }
 
     .settings-panel {
       margin-top: 0.5rem;
       padding: 0.75rem 1rem;
-      background: #fff;
-      border: 1px solid #e5e7eb;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
       border-radius: 8px;
     }
 
     .settings-panel label {
       font-size: 0.8rem;
-      color: #6b7280;
+      color: var(--text-muted);
       display: block;
       margin-bottom: 0.25rem;
     }
@@ -517,16 +588,96 @@
 
     .settings-panel select {
       padding: 0.4rem 0.5rem;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border-input);
       border-radius: 6px;
       font-size: 0.85rem;
-      background: #fff;
+      background: var(--card-bg);
+      color: var(--text);
     }
 
     .speed-display {
       font-size: 0.8rem;
-      color: #374151;
+      color: var(--text-secondary);
       text-align: center;
+    }
+
+    .mode-picker {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .mode-option {
+      flex: 1;
+      padding: 0.6rem 0.5rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      cursor: pointer;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      transition: all 0.15s;
+    }
+
+    .mode-option:hover { border-color: var(--text-faint); }
+
+    .mode-option.active {
+      border-color: var(--primary);
+      background: var(--primary-hover);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .mc-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .mc-choice {
+      padding: 0.65rem 1rem;
+      border: 1px solid var(--border-input);
+      border-radius: 8px;
+      background: var(--card-bg);
+      cursor: pointer;
+      font-size: 0.9rem;
+      text-align: left;
+      transition: all 0.15s;
+    }
+
+    .mc-choice:hover { border-color: var(--primary); background: var(--primary-hover); }
+
+    .mc-choice.selected {
+      border-color: var(--primary);
+      background: var(--primary-hover);
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    .mc-choice.correct {
+      border-color: var(--success);
+      background: var(--success-bg);
+    }
+
+    .mc-choice.incorrect {
+      border-color: var(--danger);
+      background: var(--error-bg);
+    }
+
+    .key-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--text-faint);
+      background: var(--key-badge-bg);
+      border: 1px solid var(--key-badge-border);
+      border-radius: 3px;
+      padding: 0.05rem 0.3rem;
+      margin-left: 0.35rem;
+      vertical-align: middle;
+      line-height: 1.3;
     }
 
     .hidden { display: none; }
@@ -542,8 +693,8 @@
         <p class="label">Upload study files</p>
         <input type="file" id="file-input" accept=".pdf,.docx" multiple>
         <div style="display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0;">
-          <label for="num-questions" style="font-size: 0.85rem; color: #6b7280; white-space: nowrap;">Questions:</label>
-          <input type="number" id="num-questions" value="10" min="1" max="30" style="width: 4rem; padding: 0.4rem 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; text-align: center;">
+          <label for="num-questions" style="font-size: 0.85rem; color: var(--text-muted); white-space: nowrap;">Questions:</label>
+          <input type="number" id="num-questions" value="10" min="1" max="30" style="width: 4rem; padding: 0.4rem 0.5rem; border: 1px solid var(--border-input); border-radius: 6px; font-size: 0.9rem; text-align: center; background: var(--card-bg); color: var(--text);">
         </div>
         <button class="btn-primary" id="btn-upload" disabled>Generate Quiz</button>
       </div>
@@ -563,7 +714,7 @@
       <div class="card loading">
         <div class="spinner"></div>
         <p>Generating questions from your files...</p>
-        <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #9ca3af;">This may take 10-30 seconds.</p>
+        <p style="font-size: 0.85rem; margin-top: 0.5rem; color: var(--text-faint);">This may take 10-30 seconds.</p>
       </div>
     </div>
 
@@ -571,11 +722,19 @@
     <div id="screen-review" class="hidden">
       <div class="card">
         <p class="label">Review Questions <span id="review-count"></span></p>
-        <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1rem;">Edit or remove questions before starting the quiz.</p>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">Edit or remove questions before starting the quiz.</p>
         <div id="review-list"></div>
       </div>
       <div id="review-filters"></div>
       <p id="filter-count" class="filter-count"></p>
+      <div style="margin-top: 0.75rem;">
+        <p class="label" style="margin-bottom: 0.4rem;">Answer Mode</p>
+        <div class="mode-picker" id="mode-picker">
+          <button class="mode-option active" data-mode="voice">Voice</button>
+          <button class="mode-option" data-mode="typed">Typed</button>
+          <button class="mode-option" data-mode="mc">Multiple Choice</button>
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn-primary" id="btn-start-quiz" style="flex: 1;">Start Quiz</button>
         <button class="btn-secondary" id="btn-cancel-review">Cancel</button>
@@ -586,7 +745,7 @@
     <div id="screen-quiz" class="hidden">
       <div class="score-bar">
         <span id="progress">Question 1 / 10</span>
-        <span id="source-label" style="font-size: 0.8rem; color: #6b7280;"></span>
+        <span id="source-label" style="font-size: 0.8rem; color: var(--text-muted);"></span>
         <span id="score">0 / 0 points</span>
       </div>
 
@@ -598,16 +757,20 @@
           <p class="label">Your Answer</p>
           <div class="transcript" id="transcript">Press record to answer...</div>
           <div class="btn-row">
-            <button class="btn-record" id="btn-record">Record</button>
-            <button class="btn-secondary" id="btn-skip">Skip</button>
-            <button class="btn-flag" id="btn-flag-question">Flag</button>
+            <button class="btn-record" id="btn-record">Record <span class="key-badge">R</span></button>
+            <button class="btn-secondary" id="btn-skip">Skip <span class="key-badge">S</span></button>
+            <button class="btn-flag" id="btn-flag-question">Flag <span class="key-badge">F</span></button>
           </div>
           <div class="type-fallback" id="type-fallback">
             <p class="label" style="margin-top: 1rem;">Or type your answer</p>
             <div style="display: flex; gap: 0.5rem;">
-              <input type="text" id="typed-answer" placeholder="Type your answer here..." style="flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95rem;">
+              <input type="text" id="typed-answer" placeholder="Type your answer here..." style="flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--border-input); border-radius: 8px; font-size: 0.95rem; background: var(--card-bg); color: var(--text);">
               <button class="btn-primary" id="btn-submit-typed" disabled>Submit</button>
             </div>
+          </div>
+          <div id="mc-section" class="hidden">
+            <p class="label" style="margin-top: 0.5rem;">Choose your answer</p>
+            <div class="mc-choices" id="mc-choices"></div>
           </div>
         </div>
 
@@ -624,8 +787,8 @@
 
         <div id="next-section" class="hidden">
           <div class="btn-row">
-            <button class="btn-primary" id="btn-next">Next Question</button>
-            <button class="btn-secondary" id="btn-end">End Quiz</button>
+            <button class="btn-primary" id="btn-next">Next Question <span class="key-badge">N</span></button>
+            <button class="btn-secondary" id="btn-end">End Quiz <span class="key-badge">E</span></button>
           </div>
         </div>
       </div>
@@ -684,6 +847,7 @@ let recognition = null;
 let isRecording = false;
 let sessionId = null;
 let multiFile = false;
+let quizMode = "voice";
 
 // --- DOM refs ---
 const $ = (id) => document.getElementById(id);
@@ -835,7 +999,7 @@ function updateFilterCount() {
 function renderReviewList() {
   const list = $("review-list");
   if (questions.length === 0) {
-    list.innerHTML = `<p style="color: #dc2626; text-align: center; padding: 1rem;">No questions remaining.</p>`;
+    list.innerHTML = `<p style="color: var(--danger); text-align: center; padding: 1rem;">No questions remaining.</p>`;
     $("btn-start-quiz").disabled = true;
     return;
   }
@@ -933,7 +1097,15 @@ function renderReviewList() {
   });
 }
 
-$("btn-start-quiz").addEventListener("click", () => {
+$("mode-picker").querySelectorAll(".mode-option").forEach(btn => {
+  btn.addEventListener("click", () => {
+    $("mode-picker").querySelectorAll(".mode-option").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    quizMode = btn.dataset.mode;
+  });
+});
+
+$("btn-start-quiz").addEventListener("click", async () => {
   const filtered = getFilteredIndices();
   if (filtered.length === 0) {
     showError("No questions match your filters.");
@@ -941,6 +1113,35 @@ $("btn-start-quiz").addEventListener("click", () => {
   }
   queue = filtered;
   queuePos = 0;
+
+  if (quizMode === "mc") {
+    const needChoices = filtered.some(i => !questions[i].choices);
+    if (needChoices) {
+      $("btn-start-quiz").disabled = true;
+      $("btn-start-quiz").textContent = "Generating choices...";
+      try {
+        const qsForChoices = filtered.map(i => ({ question: questions[i].question, expected_answer: questions[i].expected_answer }));
+        const res = await fetch(`${API}/generate-choices`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questions: qsForChoices }),
+        });
+        if (!res.ok) throw new Error("Failed to generate choices");
+        const data = await res.json();
+        filtered.forEach((qi, j) => {
+          if (data.choices[j]) questions[qi].choices = data.choices[j];
+        });
+      } catch(e) {
+        showError(e.message);
+        $("btn-start-quiz").disabled = false;
+        $("btn-start-quiz").textContent = "Start Quiz";
+        return;
+      }
+      $("btn-start-quiz").disabled = false;
+      $("btn-start-quiz").textContent = "Start Quiz";
+    }
+  }
+
   startQuiz();
 });
 
@@ -970,16 +1171,54 @@ function showQuestion() {
   $("grading-section").classList.add("hidden");
   $("feedback-section").classList.add("hidden");
   $("next-section").classList.add("hidden");
-  $("transcript").textContent = "Press record to answer...";
-  $("btn-record").textContent = "Record";
-  $("btn-record").classList.remove("recording");
-  $("btn-record").disabled = false;
   $("btn-skip").disabled = false;
+  $("btn-next").innerHTML = 'Next Question <span class="key-badge">N</span>';
+
+  $("btn-record").classList.remove("recording");
+  $("btn-record").innerHTML = 'Record <span class="key-badge">R</span>';
+  $("btn-record").disabled = false;
   $("typed-answer").value = "";
   $("btn-submit-typed").disabled = true;
-  $("btn-next").textContent = "Next Question";
+
+  if (quizMode === "mc") {
+    $("btn-record").classList.add("hidden");
+    $("transcript").classList.add("hidden");
+    $("type-fallback").classList.add("hidden");
+    $("mc-section").classList.remove("hidden");
+    renderMcChoices(q);
+  } else if (quizMode === "typed") {
+    $("btn-record").classList.add("hidden");
+    $("transcript").classList.add("hidden");
+    $("type-fallback").classList.remove("hidden");
+    $("type-fallback").querySelector(".label").style.display = "none";
+    $("mc-section").classList.add("hidden");
+  } else {
+    $("btn-record").classList.remove("hidden");
+    $("transcript").classList.remove("hidden");
+    $("transcript").textContent = "Press record to answer...";
+    $("type-fallback").classList.remove("hidden");
+    $("type-fallback").querySelector(".label").style.display = "";
+    $("mc-section").classList.add("hidden");
+  }
 
   speak(q.question);
+}
+
+function renderMcChoices(q) {
+  const container = $("mc-choices");
+  container.innerHTML = (q.choices || []).map((c, i) =>
+    `<button class="mc-choice" data-idx="${i}">${c}</button>`
+  ).join("");
+
+  container.querySelectorAll(".mc-choice").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("selected")) return;
+      container.querySelectorAll(".mc-choice").forEach(b => b.disabled = true);
+      btn.classList.add("selected");
+      const chosen = btn.textContent;
+      submitAnswer(chosen);
+    });
+  });
 }
 
 function updateScore() {
@@ -1116,7 +1355,7 @@ function startRecording() {
   isRecording = true;
   recognition._resetFinal();
   $("transcript").textContent = "Listening...";
-  $("btn-record").textContent = "Stop";
+  $("btn-record").innerHTML = 'Stop <span class="key-badge">R</span>';
   $("btn-record").classList.add("recording");
   $("btn-skip").disabled = true;
   recognition.start();
@@ -1124,7 +1363,7 @@ function startRecording() {
 
 function stopRecording() {
   isRecording = false;
-  $("btn-record").textContent = "Record";
+  $("btn-record").innerHTML = 'Record <span class="key-badge">R</span>';
   $("btn-record").classList.remove("recording");
   if (recognition) {
     const finalText = recognition._getFinal();
@@ -1238,7 +1477,7 @@ function showFeedback(fb) {
   };
 
   const retryNote = fb.willRetry
-    ? `<p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">This question will come back later.</p>`
+    ? `<p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">This question will come back later.</p>`
     : "";
 
   const explainBtn = fb.retriesExhausted
@@ -1267,7 +1506,7 @@ function showFeedback(fb) {
   updateScore();
 
   if (queuePos >= queue.length - 1) {
-    $("btn-next").textContent = "View Summary";
+    $("btn-next").innerHTML = 'View Summary <span class="key-badge">N</span>';
   }
 }
 
@@ -1366,14 +1605,14 @@ $("btn-flag-question").addEventListener("click", () => {
   $("feedback-section").innerHTML = `
     <div class="feedback incorrect">
       <p class="judgment-label">Flagged — removed from quiz</p>
-      <p style="font-size: 0.85rem; color: #6b7280;">This question won't count toward your score.</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">This question won't count toward your score.</p>
     </div>
   `;
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
 
   if (queuePos >= queue.length - 1) {
-    $("btn-next").textContent = "View Summary";
+    $("btn-next").innerHTML = 'View Summary <span class="key-badge">N</span>';
   }
 });
 
@@ -1460,7 +1699,7 @@ $("btn-skip").addEventListener("click", () => {
   }
 
   const retryNote = willRetry
-    ? `<p style="font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem;">This question will come back later.</p>`
+    ? `<p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">This question will come back later.</p>`
     : "";
 
   $("answer-section").classList.add("hidden");
@@ -1476,7 +1715,7 @@ $("btn-skip").addEventListener("click", () => {
   updateScore();
 
   if (queuePos >= queue.length - 1) {
-    $("btn-next").textContent = "View Summary";
+    $("btn-next").innerHTML = 'View Summary <span class="key-badge">N</span>';
   }
 });
 
@@ -1501,6 +1740,43 @@ $("btn-end").addEventListener("click", () => {
     }
   });
   showSummary();
+});
+
+// --- Keyboard Shortcuts ---
+let currentScreen = "upload";
+const _origShowScreen = showScreen;
+showScreen = function(name) { currentScreen = name; _origShowScreen(name); };
+
+document.addEventListener("keydown", (e) => {
+  if (currentScreen !== "quiz") return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+  const key = e.key.toLowerCase();
+  const answerVisible = !$("answer-section").classList.contains("hidden");
+  const nextVisible = !$("next-section").classList.contains("hidden");
+
+  if (key === "r" && answerVisible && quizMode === "voice") {
+    e.preventDefault();
+    $("btn-record").click();
+  } else if (key === "s" && answerVisible && !$("btn-skip").disabled) {
+    e.preventDefault();
+    $("btn-skip").click();
+  } else if (key === "f" && answerVisible) {
+    e.preventDefault();
+    $("btn-flag-question").click();
+  } else if (key === "n" && nextVisible) {
+    e.preventDefault();
+    $("btn-next").click();
+  } else if (key === "e" && nextVisible) {
+    e.preventDefault();
+    $("btn-end").click();
+  } else if (quizMode === "mc" && answerVisible && key >= "1" && key <= "4") {
+    e.preventDefault();
+    const choices = $("mc-choices").querySelectorAll(".mc-choice");
+    const idx = parseInt(key) - 1;
+    if (choices[idx] && !choices[idx].disabled) choices[idx].click();
+  }
 });
 
 // --- Summary ---
@@ -1533,7 +1809,7 @@ function showSummary() {
       <div class="summary-item${isFlagged ? " flagged" : ""}">
         <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
         <div class="summary-detail">
-          <p class="q-text">${num}. ${q.question}${flagLabel}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
+          <p class="q-text">${num}. ${q.question}${flagLabel}<span style="color: var(--text-faint); font-weight: 400;">${retryInfo}</span></p>
           <p class="q-explanation">${q.explanation}</p>
         </div>
       </div>
@@ -1581,7 +1857,7 @@ $("btn-history").addEventListener("click", async () => {
     const sessions = await res.json();
 
     if (sessions.length === 0) {
-      $("history-list").innerHTML = `<p style="color: #6b7280; text-align: center; padding: 1rem;">No quiz sessions yet. Take a quiz first!</p>`;
+      $("history-list").innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No quiz sessions yet. Take a quiz first!</p>`;
       return;
     }
 
@@ -1611,7 +1887,7 @@ $("btn-history").addEventListener("click", async () => {
     });
   } catch (err) {
     showError(err.message);
-    $("history-list").innerHTML = `<p style="color: #dc2626; text-align: center; padding: 1rem;">Failed to load history.</p>`;
+    $("history-list").innerHTML = `<p style="color: var(--danger); text-align: center; padding: 1rem;">Failed to load history.</p>`;
   }
 });
 
@@ -1648,7 +1924,7 @@ async function showSessionDetail(sid) {
         <div class="summary-item">
           <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
           <div class="summary-detail">
-            <p class="q-text">${i + 1}. ${q.question}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
+            <p class="q-text">${i + 1}. ${q.question}<span style="color: var(--text-faint); font-weight: 400;">${retryInfo}</span></p>
             <p class="q-explanation">${explanation}</p>
           </div>
         </div>

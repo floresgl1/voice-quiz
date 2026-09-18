@@ -41,6 +41,16 @@ Grading guidelines:
 - "incorrect" means the answer is wrong or doesn't address the question"""
 
 
+def build_choices_prompt(questions: list[dict]) -> str:
+    q_list = "\n".join(f'{i+1}. Q: {q["question"]}\n   A: {q["expected_answer"]}' for i, q in enumerate(questions))
+    return f"""For each question below, generate 4 multiple-choice options: one correct answer and three plausible distractors.
+
+Return ONLY a JSON array where each element is an array of 4 strings (the choices). The correct answer should be randomly placed among the 4 options (not always first). Distractors should be wrong but realistic.
+
+Questions:
+{q_list}"""
+
+
 def build_explain_prompt(question: str, expected_answer: str, user_attempts: list[str]) -> str:
     attempts_text = "\n".join(f"- Attempt {i+1}: {a}" for i, a in enumerate(user_attempts))
     return f"""You are a patient tutor helping a student understand a concept they struggled with on a quiz. They attempted this question multiple times and still didn't get it right.

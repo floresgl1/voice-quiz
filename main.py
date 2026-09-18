@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from extraction import extract_text
-from claude_client import generate_questions, grade_answer, explain_concept
+from claude_client import generate_questions, grade_answer, explain_concept, generate_choices
 from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, create_flag, update_session_max_points, get_flags, update_question, delete_question
 
 ROOT = Path(__file__).parent
@@ -220,6 +220,20 @@ def flag_question(req: FlagRequest):
 @app.get("/flags")
 def list_flags():
     return get_flags()
+
+
+class GenerateChoicesRequest(BaseModel):
+    questions: list[dict]
+
+
+@app.post("/generate-choices")
+def gen_choices(req: GenerateChoicesRequest):
+    try:
+        choices = generate_choices(req.questions)
+    except Exception as e:
+        log.exception("Failed to generate MC choices")
+        raise HTTPException(502, f"AI service error: {e}")
+    return {"choices": choices}
 
 
 class ExplainRequest(BaseModel):
