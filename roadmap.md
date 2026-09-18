@@ -70,10 +70,10 @@
 ## v2.2 — AI Quality Flagging
 **Goal:** Let the user flag bad questions or bad grading during a quiz.
 
-- [ ] "Flag Question" button — removes from queue, doesn't count against score
-- [ ] "Flag Grading" button — user overrides grade, score recalculated
-- [ ] `flags` table + `POST /flag` and `GET /flags` endpoints
-- [ ] Flagged questions visually distinct in summary
+- [x] "Flag Question" button — removes from queue, doesn't count against score
+- [x] "Flag Grading" button — user overrides grade, score recalculated
+- [x] `flags` table + `POST /flag` and `GET /flags` endpoints
+- [x] Flagged questions visually distinct in summary
 
 ---
 
