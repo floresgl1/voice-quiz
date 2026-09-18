@@ -34,7 +34,8 @@ def init_db():
             question        TEXT    NOT NULL,
             expected_answer TEXT    NOT NULL,
             topic           TEXT,
-            difficulty      TEXT
+            difficulty      TEXT,
+            source_file     TEXT
         );
 
         CREATE TABLE IF NOT EXISTS attempts (
@@ -64,8 +65,8 @@ def create_session(source_file: str, questions: list[dict]) -> dict:
     db_questions = []
     for i, q in enumerate(questions):
         cur = conn.execute(
-            "INSERT INTO questions (session_id, position, question, expected_answer, topic, difficulty) VALUES (?, ?, ?, ?, ?, ?)",
-            (session_id, i + 1, q["question"], q["expected_answer"], q.get("topic"), q.get("difficulty")),
+            "INSERT INTO questions (session_id, position, question, expected_answer, topic, difficulty, source_file) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (session_id, i + 1, q["question"], q["expected_answer"], q.get("topic"), q.get("difficulty"), q.get("source_file")),
         )
         db_questions.append({**q, "db_id": cur.lastrowid})
 
@@ -125,7 +126,7 @@ def get_session_detail(session_id: int) -> dict | None:
         return None
 
     questions = conn.execute(
-        "SELECT id, position, question, expected_answer, topic, difficulty FROM questions WHERE session_id = ? ORDER BY position",
+        "SELECT id, position, question, expected_answer, topic, difficulty, source_file FROM questions WHERE session_id = ? ORDER BY position",
         (session_id,),
     ).fetchall()
 

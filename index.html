@@ -308,8 +308,8 @@
     <!-- Upload Screen -->
     <div id="screen-upload">
       <div class="card">
-        <p class="label">Upload a study file</p>
-        <input type="file" id="file-input" accept=".pdf,.docx">
+        <p class="label">Upload study files</p>
+        <input type="file" id="file-input" accept=".pdf,.docx" multiple>
         <button class="btn-primary" id="btn-upload" disabled>Generate Quiz</button>
       </div>
       <button class="btn-secondary" id="btn-history" style="width: 100%; margin-top: 0.5rem;">View History</button>
@@ -319,7 +319,7 @@
     <div id="screen-loading" class="hidden">
       <div class="card loading">
         <div class="spinner"></div>
-        <p>Generating questions from your file...</p>
+        <p>Generating questions from your files...</p>
         <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #9ca3af;">This may take 10-30 seconds.</p>
       </div>
     </div>
@@ -328,6 +328,7 @@
     <div id="screen-quiz" class="hidden">
       <div class="score-bar">
         <span id="progress">Question 1 / 10</span>
+        <span id="source-label" style="font-size: 0.8rem; color: #6b7280;"></span>
         <span id="score">0 / 0 points</span>
       </div>
 
@@ -423,6 +424,7 @@ let queuePos = 0;
 let recognition = null;
 let isRecording = false;
 let sessionId = null;
+let multiFile = false;
 
 // --- DOM refs ---
 const $ = (id) => document.getElementById(id);
@@ -449,18 +451,24 @@ function showError(msg) {
 
 // --- Upload ---
 $("file-input").addEventListener("change", () => {
-  $("btn-upload").disabled = !$("file-input").files.length;
+  const count = $("file-input").files.length;
+  $("btn-upload").disabled = !count;
+  $("btn-upload").textContent = count > 1
+    ? `Generate Quiz from ${count} files`
+    : "Generate Quiz";
 });
 
 $("btn-upload").addEventListener("click", async () => {
-  const file = $("file-input").files[0];
-  if (!file) return;
+  const fileList = $("file-input").files;
+  if (!fileList.length) return;
 
   showScreen("loading");
   $("error-container").classList.add("hidden");
 
   const form = new FormData();
-  form.append("file", file);
+  for (const file of fileList) {
+    form.append("files", file);
+  }
 
   try {
     const res = await fetch(`${API}/upload`, { method: "POST", body: form });
@@ -469,8 +477,12 @@ $("btn-upload").addEventListener("click", async () => {
       throw new Error(err.detail || "Upload failed");
     }
     const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      data.warnings.forEach(w => showError(w));
+    }
     sessionId = data.session_id;
     questions = data.questions;
+    multiFile = new Set(questions.map(q => q.source_file)).size > 1;
     questions.forEach(q => {
       q.status = "pending";
       q.retries = 0;
@@ -499,6 +511,7 @@ function showQuestion() {
   const retryLabel = q.retries > 0 ? ` (Retry ${q.retries}/2)` : "";
   $("question-text").textContent = q.question;
   $("progress").textContent = `Question ${queuePos + 1} / ${queue.length}${retryLabel}`;
+  $("source-label").textContent = multiFile && q.source_file ? `From: ${q.source_file}` : "";
   updateScore();
 
   $("answer-section").classList.remove("hidden");
@@ -902,22 +915,37 @@ function showSummary() {
   $("final-score").textContent = `${totalPoints} / ${maxPoints} points`;
 
   const list = $("summary-list");
-  list.innerHTML = questions.map((q, i) => {
+
+  function renderQuestionItem(q, num) {
     const score = q.bestScore;
     const badgeClass = q.status === "skipped" ? "skipped" : (q.judgment || "incorrect");
     const badgeLabel = score === 1 ? "1" : score === 0.5 ? ".5" : "0";
     const retryInfo = q.retries > 0 ? ` (${q.retries} ${q.retries === 1 ? "retry" : "retries"})` : "";
-
     return `
       <div class="summary-item">
         <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
         <div class="summary-detail">
-          <p class="q-text">${i + 1}. ${q.question}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
+          <p class="q-text">${num}. ${q.question}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
           <p class="q-explanation">${q.explanation}</p>
         </div>
       </div>
     `;
-  }).join("");
+  }
+
+  if (multiFile) {
+    const groups = {};
+    questions.forEach((q, i) => {
+      const src = q.source_file || "Unknown";
+      if (!groups[src]) groups[src] = [];
+      groups[src].push({ q, num: i + 1 });
+    });
+    list.innerHTML = Object.entries(groups).map(([src, items]) => {
+      return `<p class="label" style="margin-top: 1rem;">${src}</p>` +
+        items.map(({ q, num }) => renderQuestionItem(q, num)).join("");
+    }).join("");
+  } else {
+    list.innerHTML = questions.map((q, i) => renderQuestionItem(q, i + 1)).join("");
+  }
 }
 
 $("btn-restart").addEventListener("click", () => {
@@ -927,8 +955,10 @@ $("btn-restart").addEventListener("click", () => {
   currentIndex = 0;
   totalPoints = 0;
   sessionId = null;
+  multiFile = false;
   $("file-input").value = "";
   $("btn-upload").disabled = true;
+  $("btn-upload").textContent = "Generate Quiz";
   showScreen("upload");
 });
 

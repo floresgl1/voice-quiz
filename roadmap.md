@@ -45,14 +45,14 @@
 ## v2.0 — Persistence Foundation
 **Goal:** Add SQLite so session results survive a browser refresh and can be reviewed later.
 
-- [ ] New `database.py` — plain `sqlite3`, no ORM. DB at `./data/voicequiz.db`
-- [ ] Schema: `sessions`, `questions`, `attempts` tables
-- [ ] `POST /upload` returns a `session_id`; stores session + questions in DB
-- [ ] `POST /grade` accepts `session_id` + `question_id`, writes attempt row
-- [ ] `GET /sessions` — list past sessions (date, source file, score)
-- [ ] `GET /sessions/{id}` — full session detail with per-question results
-- [ ] Frontend sends `session_id` with grading/explain requests
-- [ ] "History" button on upload screen → session list view
+- [x] New `database.py` — plain `sqlite3`, no ORM. DB at `./data/voicequiz.db`
+- [x] Schema: `sessions`, `questions`, `attempts` tables
+- [x] `POST /upload` returns a `session_id`; stores session + questions in DB
+- [x] `POST /grade` accepts `session_id` + `question_id`, writes attempt row
+- [x] `GET /sessions` — list past sessions (date, source file, score)
+- [x] `GET /sessions/{id}` — full session detail with per-question results
+- [x] Frontend sends `session_id` with grading/explain requests
+- [x] "History" button on upload screen → session list view
 
 ---
 

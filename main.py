@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -47,30 +47,55 @@ def health():
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
-    suffix = _get_extension(file.filename)
-    if suffix not in ALLOWED_EXTENSIONS:
-        raise HTTPException(400, f"Unsupported file type: {suffix}")
+async def upload(files: list[UploadFile] = File(...)):
+    all_questions = []
+    warnings = []
+    source_names = []
 
-    contents = await file.read()
-    text = extract_text(contents, suffix)
-    if not text.strip():
-        raise HTTPException(422, "Could not extract any text from the file.")
+    for file in files:
+        filename = file.filename or "unknown"
+        suffix = _get_extension(filename)
+        if suffix not in ALLOWED_EXTENSIONS:
+            warnings.append(f"{filename}: unsupported file type ({suffix})")
+            continue
 
-    try:
-        questions = generate_questions(text)
-    except ValueError as e:
-        log.exception("Failed to parse generated questions")
-        raise HTTPException(502, f"Failed to generate questions: {e}")
-    except Exception as e:
-        log.exception("Claude API error during question generation")
-        raise HTTPException(502, f"AI service error: {e}")
+        contents = await file.read()
+        text = extract_text(contents, suffix)
+        if not text.strip():
+            warnings.append(f"{filename}: could not extract any text")
+            continue
 
-    result = create_session(file.filename or "unknown", questions)
-    return {
+        try:
+            questions = generate_questions(text)
+        except ValueError as e:
+            log.exception("Failed to parse generated questions for %s", filename)
+            warnings.append(f"{filename}: failed to generate questions")
+            continue
+        except Exception as e:
+            log.exception("Claude API error for %s", filename)
+            warnings.append(f"{filename}: AI service error")
+            continue
+
+        for q in questions:
+            q["source_file"] = filename
+        all_questions.extend(questions)
+        source_names.append(filename)
+
+    if not all_questions:
+        detail = "No questions could be generated."
+        if warnings:
+            detail += " Warnings: " + "; ".join(warnings)
+        raise HTTPException(422, detail)
+
+    session_label = ", ".join(source_names)
+    result = create_session(session_label, all_questions)
+    response = {
         "session_id": result["session_id"],
         "questions": result["questions"],
     }
+    if warnings:
+        response["warnings"] = warnings
+    return response
 
 
 class GradeRequest(BaseModel):
