@@ -680,6 +680,49 @@
       line-height: 1.3;
     }
 
+    .source-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .source-tab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 0;
+      text-align: center;
+    }
+
+    .source-tab:hover { color: var(--text); }
+
+    .source-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 600;
+    }
+
+    #paste-input {
+      width: 100%;
+      min-height: 8rem;
+      padding: 0.75rem;
+      border: 1px solid var(--border-input);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: vertical;
+      margin-bottom: 0.75rem;
+      background: var(--card-bg);
+      color: var(--text);
+    }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -690,8 +733,16 @@
     <!-- Upload Screen -->
     <div id="screen-upload">
       <div class="card">
-        <p class="label">Upload study files</p>
-        <input type="file" id="file-input" accept=".pdf,.docx" multiple>
+        <div class="source-tabs">
+          <button class="source-tab active" data-source="file">Upload Files</button>
+          <button class="source-tab" data-source="paste">Paste Text</button>
+        </div>
+        <div id="source-file">
+          <input type="file" id="file-input" accept=".pdf,.docx" multiple>
+        </div>
+        <div id="source-paste" class="hidden">
+          <textarea id="paste-input" placeholder="Paste your notes, lecture content, or study material here..."></textarea>
+        </div>
         <div style="display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0;">
           <label for="num-questions" style="font-size: 0.85rem; color: var(--text-muted); white-space: nowrap;">Questions:</label>
           <input type="number" id="num-questions" value="10" min="1" max="30" style="width: 4rem; padding: 0.4rem 0.5rem; border: 1px solid var(--border-input); border-radius: 6px; font-size: 0.9rem; text-align: center; background: var(--card-bg); color: var(--text);">
@@ -874,29 +925,58 @@ function showError(msg) {
 }
 
 // --- Upload ---
-$("file-input").addEventListener("change", () => {
-  const count = $("file-input").files.length;
-  $("btn-upload").disabled = !count;
-  $("btn-upload").textContent = count > 1
-    ? `Generate Quiz from ${count} files`
-    : "Generate Quiz";
+let sourceMode = "file";
+
+document.querySelectorAll(".source-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".source-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    sourceMode = tab.dataset.source;
+    $("source-file").classList.toggle("hidden", sourceMode !== "file");
+    $("source-paste").classList.toggle("hidden", sourceMode !== "paste");
+    updateUploadButton();
+  });
 });
 
-$("btn-upload").addEventListener("click", async () => {
-  const fileList = $("file-input").files;
-  if (!fileList.length) return;
+$("file-input").addEventListener("change", updateUploadButton);
+$("paste-input").addEventListener("input", updateUploadButton);
 
+function updateUploadButton() {
+  if (sourceMode === "file") {
+    const count = $("file-input").files.length;
+    $("btn-upload").disabled = !count;
+    $("btn-upload").textContent = count > 1 ? `Generate Quiz from ${count} files` : "Generate Quiz";
+  } else {
+    $("btn-upload").disabled = !$("paste-input").value.trim();
+    $("btn-upload").textContent = "Generate Quiz";
+  }
+}
+
+$("btn-upload").addEventListener("click", async () => {
   showScreen("loading");
   $("error-container").classList.add("hidden");
 
-  const form = new FormData();
-  for (const file of fileList) {
-    form.append("files", file);
-  }
-  form.append("num_questions", $("num-questions").value);
-
   try {
-    const res = await fetch(`${API}/upload`, { method: "POST", body: form });
+    let res;
+    if (sourceMode === "paste") {
+      const text = $("paste-input").value.trim();
+      if (!text) return;
+      res = await fetch(`${API}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, num_questions: parseInt($("num-questions").value) || 10 }),
+      });
+    } else {
+      const fileList = $("file-input").files;
+      if (!fileList.length) return;
+      const form = new FormData();
+      for (const file of fileList) {
+        form.append("files", file);
+      }
+      form.append("num_questions", $("num-questions").value);
+      res = await fetch(`${API}/upload`, { method: "POST", body: form });
+    }
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || "Upload failed");

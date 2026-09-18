@@ -99,6 +99,37 @@ async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(
     return response
 
 
+class GenerateFromTextRequest(BaseModel):
+    text: str
+    num_questions: int = 10
+
+
+@app.post("/generate")
+def generate_from_text(req: GenerateFromTextRequest):
+    num_questions = max(1, min(30, req.num_questions))
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(422, "No text provided")
+
+    try:
+        questions = generate_questions(text, num_questions)
+    except ValueError as e:
+        log.exception("Failed to parse generated questions from pasted text")
+        raise HTTPException(502, f"Failed to generate questions: {e}")
+    except Exception as e:
+        log.exception("Claude API error for pasted text")
+        raise HTTPException(502, f"AI service error: {e}")
+
+    for q in questions:
+        q["source_file"] = "Pasted text"
+
+    result = create_session("Pasted text", questions)
+    return {
+        "session_id": result["session_id"],
+        "questions": result["questions"],
+    }
+
+
 class GradeRequest(BaseModel):
     question: str
     expected_answer: str
