@@ -80,10 +80,10 @@
 ## v2.3 — Question Editing
 **Goal:** Review and tweak AI-generated questions before starting the quiz.
 
-- [ ] "Review Questions" screen between upload and quiz (with "Skip Review" option)
-- [ ] Editable cards: question text, expected answer, topic, difficulty
-- [ ] Can delete a question (adjusts max_points)
-- [ ] `PUT` and `DELETE` endpoints for questions
+- [x] "Review Questions" screen between upload and quiz
+- [x] Editable cards: question text, expected answer, topic, difficulty
+- [x] Can delete a question (adjusts max_points)
+- [x] `PUT` and `DELETE` endpoints for questions
 
 ---
 

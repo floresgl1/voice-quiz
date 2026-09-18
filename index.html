@@ -323,6 +323,115 @@
       color: #9ca3af;
     }
 
+    .review-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .review-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .review-num {
+      flex-shrink: 0;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #6b7280;
+      padding-top: 0.1rem;
+    }
+
+    .review-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .review-q-text {
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: #1a1a1a;
+    }
+
+    .review-meta {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .review-tag {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+
+    .review-actions {
+      flex-shrink: 0;
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .review-actions button {
+      background: none;
+      border: none;
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .btn-edit-q { color: #2563eb; }
+    .btn-edit-q:hover { background: #eff6ff; }
+    .btn-delete-q { color: #dc2626; }
+    .btn-delete-q:hover { background: #fee2e2; }
+
+    .review-edit {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .review-edit textarea, .review-edit input[type="text"] {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      margin-bottom: 0.5rem;
+      resize: vertical;
+    }
+
+    .review-edit .review-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .review-edit .review-row input, .review-edit .review-row select {
+      flex: 1;
+    }
+
+    .review-edit select {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+
+    .review-edit .edit-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 0.15rem;
+    }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -346,6 +455,19 @@
         <div class="spinner"></div>
         <p>Generating questions from your files...</p>
         <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #9ca3af;">This may take 10-30 seconds.</p>
+      </div>
+    </div>
+
+    <!-- Review Screen -->
+    <div id="screen-review" class="hidden">
+      <div class="card">
+        <p class="label">Review Questions <span id="review-count"></span></p>
+        <p style="font-size: 0.85rem; color: #6b7280; margin-bottom: 1rem;">Edit or remove questions before starting the quiz.</p>
+        <div id="review-list"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-start-quiz" style="flex: 1;">Start Quiz</button>
+        <button class="btn-secondary" id="btn-cancel-review">Cancel</button>
       </div>
     </div>
 
@@ -458,6 +580,7 @@ const $ = (id) => document.getElementById(id);
 const screens = {
   upload:  $("screen-upload"),
   loading: $("screen-loading"),
+  review:  $("screen-review"),
   quiz:    $("screen-quiz"),
   summary: $("screen-summary"),
   history: $("screen-history"),
@@ -518,11 +641,136 @@ $("btn-upload").addEventListener("click", async () => {
     queue = questions.map((_, i) => i);
     queuePos = 0;
     totalPoints = 0;
-    startQuiz();
+    showReview();
   } catch (e) {
     showError(e.message);
     showScreen("upload");
   }
+});
+
+// --- Review ---
+function showReview() {
+  showScreen("review");
+  $("review-count").textContent = `(${questions.length})`;
+  renderReviewList();
+}
+
+function renderReviewList() {
+  const list = $("review-list");
+  if (questions.length === 0) {
+    list.innerHTML = `<p style="color: #dc2626; text-align: center; padding: 1rem;">No questions remaining.</p>`;
+    $("btn-start-quiz").disabled = true;
+    return;
+  }
+  $("btn-start-quiz").disabled = false;
+  $("review-count").textContent = `(${questions.length})`;
+
+  const difficulties = ["easy", "medium", "hard"];
+
+  list.innerHTML = questions.map((q, i) => {
+    const srcTag = q.source_file ? `<span class="review-tag">${q.source_file}</span>` : "";
+    const topicTag = q.topic ? `<span class="review-tag">${q.topic}</span>` : "";
+    const diffTag = q.difficulty ? `<span class="review-tag">${q.difficulty}</span>` : "";
+
+    return `
+      <div class="review-card" data-idx="${i}">
+        <div class="review-header">
+          <span class="review-num">${i + 1}</span>
+          <div class="review-body">
+            <p class="review-q-text">${q.question}</p>
+            <div class="review-meta">${srcTag}${topicTag}${diffTag}</div>
+          </div>
+          <div class="review-actions">
+            <button class="btn-edit-q" data-idx="${i}">Edit</button>
+            <button class="btn-delete-q" data-idx="${i}">Remove</button>
+          </div>
+        </div>
+        <div class="review-edit hidden" id="review-edit-${i}">
+          <p class="edit-label">Question</p>
+          <textarea rows="2" data-field="question" data-idx="${i}">${q.question}</textarea>
+          <p class="edit-label">Expected Answer</p>
+          <textarea rows="2" data-field="expected_answer" data-idx="${i}">${q.expected_answer}</textarea>
+          <div class="review-row">
+            <div style="flex:1"><p class="edit-label">Topic</p><input type="text" data-field="topic" data-idx="${i}" value="${q.topic || ""}" placeholder="Topic"></div>
+            <div style="flex:1"><p class="edit-label">Difficulty</p><select data-field="difficulty" data-idx="${i}">
+              ${difficulties.map(d => `<option value="${d}"${q.difficulty === d ? " selected" : ""}>${d}</option>`).join("")}
+            </select></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  list.querySelectorAll(".btn-edit-q").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = e.target.dataset.idx;
+      const editDiv = $(`review-edit-${idx}`);
+      const isOpen = !editDiv.classList.contains("hidden");
+      editDiv.classList.toggle("hidden");
+      e.target.textContent = isOpen ? "Edit" : "Done";
+    });
+  });
+
+  list.querySelectorAll(".review-edit textarea, .review-edit input[type='text'], .review-edit select").forEach(el => {
+    el.addEventListener("change", (e) => {
+      const idx = parseInt(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      questions[idx][field] = e.target.value;
+
+      if (field === "question") {
+        const card = e.target.closest(".review-card");
+        card.querySelector(".review-q-text").textContent = e.target.value;
+      }
+
+      if (sessionId && questions[idx].db_id) {
+        const q = questions[idx];
+        fetch(`${API}/sessions/${sessionId}/questions/${q.db_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: q.question,
+            expected_answer: q.expected_answer,
+            topic: q.topic || null,
+            difficulty: q.difficulty || null,
+          }),
+        }).catch(() => {});
+      }
+    });
+  });
+
+  list.querySelectorAll(".btn-delete-q").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt(e.target.dataset.idx);
+      const q = questions[idx];
+
+      if (sessionId && q.db_id) {
+        fetch(`${API}/sessions/${sessionId}/questions/${q.db_id}`, {
+          method: "DELETE",
+        }).catch(() => {});
+      }
+
+      questions.splice(idx, 1);
+      queue = questions.map((_, i) => i);
+      renderReviewList();
+    });
+  });
+}
+
+$("btn-start-quiz").addEventListener("click", () => {
+  if (questions.length === 0) {
+    showError("No questions to quiz on. Add files or go back.");
+    return;
+  }
+  queue = questions.map((_, i) => i);
+  queuePos = 0;
+  startQuiz();
+});
+
+$("btn-cancel-review").addEventListener("click", () => {
+  questions = [];
+  queue = [];
+  sessionId = null;
+  showScreen("upload");
 });
 
 // --- Quiz ---

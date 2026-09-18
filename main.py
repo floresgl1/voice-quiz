@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from extraction import extract_text
 from claude_client import generate_questions, grade_answer, explain_concept
-from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, create_flag, update_session_max_points, get_flags
+from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, create_flag, update_session_max_points, get_flags, update_question, delete_question
 
 ROOT = Path(__file__).parent
 
@@ -172,6 +172,25 @@ def session_detail(session_id: int):
     if not detail:
         raise HTTPException(404, "Session not found")
     return detail
+
+
+class UpdateQuestionRequest(BaseModel):
+    question: str
+    expected_answer: str
+    topic: Optional[str] = None
+    difficulty: Optional[str] = None
+
+
+@app.put("/sessions/{session_id}/questions/{question_id}")
+def edit_question(session_id: int, question_id: int, req: UpdateQuestionRequest):
+    update_question(question_id, req.question, req.expected_answer, req.topic, req.difficulty)
+    return {"status": "ok"}
+
+
+@app.delete("/sessions/{session_id}/questions/{question_id}")
+def remove_question(session_id: int, question_id: int):
+    delete_question(question_id, session_id)
+    return {"status": "ok"}
 
 
 class FlagRequest(BaseModel):

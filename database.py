@@ -98,6 +98,24 @@ def save_attempt(question_id: int, attempt_num: int, user_answer: str | None,
     return attempt_id
 
 
+def update_question(question_id: int, question: str, expected_answer: str, topic: str | None, difficulty: str | None):
+    conn = _connect()
+    conn.execute(
+        "UPDATE questions SET question = ?, expected_answer = ?, topic = ?, difficulty = ? WHERE id = ?",
+        (question, expected_answer, topic, difficulty, question_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_question(question_id: int, session_id: int):
+    conn = _connect()
+    conn.execute("DELETE FROM questions WHERE id = ?", (question_id,))
+    conn.execute("UPDATE sessions SET max_points = max_points - 1 WHERE id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+
+
 def update_session_score(session_id: int, total_points: float):
     conn = _connect()
     conn.execute("UPDATE sessions SET total_points = ? WHERE id = ?", (total_points, session_id))
