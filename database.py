@@ -38,6 +38,15 @@ def init_db():
             source_file     TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS flags (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id       INTEGER NOT NULL REFERENCES questions(id),
+            flag_type         TEXT    NOT NULL,
+            override_judgment TEXT,
+            note              TEXT,
+            created_at        TEXT    NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS attempts (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             question_id INTEGER NOT NULL REFERENCES questions(id),
@@ -106,6 +115,36 @@ def complete_session(session_id: int, total_points: float):
     conn.close()
 
 
+def create_flag(question_id: int, flag_type: str, override_judgment: str | None = None, note: str | None = None) -> int:
+    conn = _connect()
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        "INSERT INTO flags (question_id, flag_type, override_judgment, note, created_at) VALUES (?, ?, ?, ?, ?)",
+        (question_id, flag_type, override_judgment, note, now),
+    )
+    flag_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return flag_id
+
+
+def update_session_max_points(session_id: int, delta: int):
+    conn = _connect()
+    conn.execute("UPDATE sessions SET max_points = max_points + ? WHERE id = ?", (delta, session_id))
+    conn.commit()
+    conn.close()
+
+
+def get_flags() -> list[dict]:
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT f.id, f.question_id, f.flag_type, f.override_judgment, f.note, f.created_at, q.question "
+        "FROM flags f JOIN questions q ON f.question_id = q.id ORDER BY f.created_at DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_sessions() -> list[dict]:
     conn = _connect()
     rows = conn.execute(
@@ -140,6 +179,11 @@ def get_session_detail(session_id: int) -> dict | None:
         ).fetchall()
         qd["attempts"] = [dict(a) for a in attempts]
         qd["best_score"] = max((a["score"] for a in qd["attempts"]), default=0)
+        flag = conn.execute(
+            "SELECT flag_type, override_judgment, note FROM flags WHERE question_id = ? ORDER BY created_at DESC LIMIT 1",
+            (q["id"],),
+        ).fetchone()
+        qd["flag"] = dict(flag) if flag else None
         result["questions"].append(qd)
 
     conn.close()

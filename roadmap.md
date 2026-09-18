@@ -59,11 +59,11 @@
 ## v2.1 — Multi-File Upload
 **Goal:** Accept multiple files and tag questions by source.
 
-- [ ] `POST /upload` accepts multiple files (processed sequentially)
-- [ ] `source_file` column on questions table
-- [ ] Frontend file input gets `multiple` attribute; button shows file count
-- [ ] Score bar shows source file label on current question
-- [ ] Summary groups/tags results by source file
+- [x] `POST /upload` accepts multiple files (processed sequentially)
+- [x] `source_file` column on questions table
+- [x] Frontend file input gets `multiple` attribute; button shows file count
+- [x] Score bar shows source file label on current question
+- [x] Summary groups/tags results by source file
 
 ---
 

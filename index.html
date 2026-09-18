@@ -263,6 +263,31 @@
       margin-top: 0.75rem;
     }
 
+    .btn-flag {
+      background: #f59e0b;
+      color: #fff;
+      font-size: 0.85rem;
+    }
+
+    .btn-flag-grading {
+      background: #f59e0b;
+      color: #fff;
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+    }
+
+    .summary-item.flagged {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+
+    .flag-badge {
+      font-size: 0.75rem;
+      color: #f59e0b;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+
     .session-item {
       display: flex;
       justify-content: space-between;
@@ -342,6 +367,7 @@
           <div class="btn-row">
             <button class="btn-record" id="btn-record">Record</button>
             <button class="btn-secondary" id="btn-skip">Skip</button>
+            <button class="btn-flag" id="btn-flag-question">Flag</button>
           </div>
           <div class="type-fallback" id="type-fallback">
             <p class="label" style="margin-top: 1rem;">Or type your answer</p>
@@ -531,7 +557,8 @@ function showQuestion() {
 }
 
 function updateScore() {
-  const maxPoints = questions.length;
+  const flaggedCount = questions.filter(q => q.flagged).length;
+  const maxPoints = questions.length - flaggedCount;
   $("score").textContent = `${totalPoints} / ${maxPoints} points`;
 }
 
@@ -741,6 +768,8 @@ function showFeedback(fb) {
     ? `<button class="btn-explain" id="btn-explain" data-qi="${fb.questionIndex}">Help me understand</button>`
     : "";
 
+  const flagGradingBtn = `<button class="btn-flag-grading" id="btn-flag-grading" data-qi="${fb.questionIndex}">Flag Grading</button>`;
+
   $("feedback-section").innerHTML = `
     <div class="feedback ${fb.judgment}">
       <p class="judgment-label">${judgmentLabels[fb.judgment]} (${fb.score} pt)</p>
@@ -748,12 +777,14 @@ function showFeedback(fb) {
       <p class="expected"><strong>Expected answer:</strong> ${fb.expected_answer}</p>
       ${retryNote}
       ${explainBtn}
+      ${flagGradingBtn}
     </div>
   `;
 
   if (fb.retriesExhausted) {
     $("btn-explain").addEventListener("click", handleExplain);
   }
+  $("btn-flag-grading").addEventListener("click", handleFlagGrading);
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
   updateScore();
@@ -813,6 +844,103 @@ async function handleExplain(e) {
     btn.disabled = false;
     btn.textContent = "Help me understand";
   }
+}
+
+// --- Flag Question ---
+$("btn-flag-question").addEventListener("click", () => {
+  window.speechSynthesis.cancel();
+  if (recognition) {
+    isRecording = false;
+    recognition.stop();
+    recognition = null;
+  }
+
+  const q = questions[currentIndex];
+  q.status = "flagged";
+  q.judgment = "flagged";
+  q.score = 0;
+  q.bestScore = 0;
+  q.explanation = "Question flagged as bad.";
+  q.flagged = true;
+
+  // Remove future occurrences of this question from the queue
+  for (let i = queue.length - 1; i > queuePos; i--) {
+    if (queue[i] === currentIndex) queue.splice(i, 1);
+  }
+
+  if (sessionId && q.db_id) {
+    fetch(`${API}/flag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        question_db_id: q.db_id,
+        flag_type: "bad_question",
+        score_delta: -(q.bestScore),
+      }),
+    }).catch(() => {});
+  }
+
+  totalPoints -= q.bestScore;
+  q.bestScore = 0;
+  updateScore();
+
+  $("answer-section").classList.add("hidden");
+  $("feedback-section").innerHTML = `
+    <div class="feedback incorrect">
+      <p class="judgment-label">Flagged — removed from quiz</p>
+      <p style="font-size: 0.85rem; color: #6b7280;">This question won't count toward your score.</p>
+    </div>
+  `;
+  $("feedback-section").classList.remove("hidden");
+  $("next-section").classList.remove("hidden");
+
+  if (queuePos >= queue.length - 1) {
+    $("btn-next").textContent = "View Summary";
+  }
+});
+
+// --- Flag Grading ---
+function handleFlagGrading(e) {
+  const qi = parseInt(e.target.dataset.qi);
+  const q = questions[qi];
+  const btn = e.target;
+
+  // Toggle: if AI said correct/partial, override to incorrect; if incorrect, override to correct
+  const currentJudgment = q.judgment;
+  let newJudgment, newScore;
+  if (currentJudgment === "incorrect") {
+    newJudgment = "correct";
+    newScore = 1.0;
+  } else {
+    newJudgment = "incorrect";
+    newScore = 0.0;
+  }
+
+  const scoreDelta = newScore - q.bestScore;
+  totalPoints += scoreDelta;
+  q.bestScore = newScore;
+  q.score = newScore;
+  q.judgment = newJudgment;
+  q.flagged = true;
+
+  if (sessionId && q.db_id) {
+    fetch(`${API}/flag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        question_db_id: q.db_id,
+        flag_type: "bad_grading",
+        override_judgment: newJudgment,
+        score_delta: scoreDelta,
+      }),
+    }).catch(() => {});
+  }
+
+  btn.textContent = `Overridden → ${newJudgment === "correct" ? "Correct" : "Incorrect"}`;
+  btn.disabled = true;
+  updateScore();
 }
 
 // --- Skip ---
@@ -911,21 +1039,24 @@ function showSummary() {
     }).catch(() => {});
   }
 
-  const maxPoints = questions.length;
+  const flaggedCount = questions.filter(q => q.flagged).length;
+  const maxPoints = questions.length - flaggedCount;
   $("final-score").textContent = `${totalPoints} / ${maxPoints} points`;
 
   const list = $("summary-list");
 
   function renderQuestionItem(q, num) {
     const score = q.bestScore;
-    const badgeClass = q.status === "skipped" ? "skipped" : (q.judgment || "incorrect");
-    const badgeLabel = score === 1 ? "1" : score === 0.5 ? ".5" : "0";
+    const isFlagged = q.flagged;
+    const badgeClass = isFlagged ? "skipped" : (q.status === "skipped" ? "skipped" : (q.judgment || "incorrect"));
+    const badgeLabel = isFlagged ? "—" : (score === 1 ? "1" : score === 0.5 ? ".5" : "0");
     const retryInfo = q.retries > 0 ? ` (${q.retries} ${q.retries === 1 ? "retry" : "retries"})` : "";
+    const flagLabel = isFlagged ? `<span class="flag-badge">FLAGGED</span>` : "";
     return `
-      <div class="summary-item">
+      <div class="summary-item${isFlagged ? " flagged" : ""}">
         <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
         <div class="summary-detail">
-          <p class="q-text">${num}. ${q.question}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
+          <p class="q-text">${num}. ${q.question}${flagLabel}<span style="color: #9ca3af; font-weight: 400;">${retryInfo}</span></p>
           <p class="q-explanation">${q.explanation}</p>
         </div>
       </div>

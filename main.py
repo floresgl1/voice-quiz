@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from extraction import extract_text
 from claude_client import generate_questions, grade_answer, explain_concept
-from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail
+from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, create_flag, update_session_max_points, get_flags
 
 ROOT = Path(__file__).parent
 
@@ -172,6 +172,34 @@ def session_detail(session_id: int):
     if not detail:
         raise HTTPException(404, "Session not found")
     return detail
+
+
+class FlagRequest(BaseModel):
+    session_id: int
+    question_db_id: int
+    flag_type: str
+    override_judgment: Optional[str] = None
+    score_delta: Optional[float] = None
+    note: Optional[str] = None
+
+
+@app.post("/flag")
+def flag_question(req: FlagRequest):
+    create_flag(req.question_db_id, req.flag_type, req.override_judgment, req.note)
+    if req.flag_type == "bad_question":
+        update_session_max_points(req.session_id, -1)
+    if req.score_delta is not None and req.score_delta != 0:
+        from database import _connect
+        conn = _connect()
+        conn.execute("UPDATE sessions SET total_points = total_points + ? WHERE id = ?", (req.score_delta, req.session_id))
+        conn.commit()
+        conn.close()
+    return {"status": "ok"}
+
+
+@app.get("/flags")
+def list_flags():
+    return get_flags()
 
 
 class ExplainRequest(BaseModel):
