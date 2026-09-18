@@ -736,12 +736,17 @@
         <div class="source-tabs">
           <button class="source-tab active" data-source="file">Upload Files</button>
           <button class="source-tab" data-source="paste">Paste Text</button>
+          <button class="source-tab" data-source="url">URL</button>
         </div>
         <div id="source-file">
           <input type="file" id="file-input" accept=".pdf,.docx" multiple>
         </div>
         <div id="source-paste" class="hidden">
           <textarea id="paste-input" placeholder="Paste your notes, lecture content, or study material here..."></textarea>
+        </div>
+        <div id="source-url" class="hidden">
+          <input type="url" id="url-input" placeholder="https://youtube.com/watch?v=... or https://github.com/user/repo" style="width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border-input); border-radius: 8px; font-size: 0.9rem; background: var(--card-bg); color: var(--text); box-sizing: border-box;">
+          <p style="font-size: 0.75rem; color: var(--text-faint); margin-top: 0.4rem;">YouTube video (transcript) or GitHub repo (code files).</p>
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0;">
           <label for="num-questions" style="font-size: 0.85rem; color: var(--text-muted); white-space: nowrap;">Questions:</label>
@@ -934,18 +939,23 @@ document.querySelectorAll(".source-tab").forEach(tab => {
     sourceMode = tab.dataset.source;
     $("source-file").classList.toggle("hidden", sourceMode !== "file");
     $("source-paste").classList.toggle("hidden", sourceMode !== "paste");
+    $("source-url").classList.toggle("hidden", sourceMode !== "url");
     updateUploadButton();
   });
 });
 
 $("file-input").addEventListener("change", updateUploadButton);
 $("paste-input").addEventListener("input", updateUploadButton);
+$("url-input").addEventListener("input", updateUploadButton);
 
 function updateUploadButton() {
   if (sourceMode === "file") {
     const count = $("file-input").files.length;
     $("btn-upload").disabled = !count;
     $("btn-upload").textContent = count > 1 ? `Generate Quiz from ${count} files` : "Generate Quiz";
+  } else if (sourceMode === "url") {
+    $("btn-upload").disabled = !$("url-input").value.trim();
+    $("btn-upload").textContent = "Generate Quiz from URL";
   } else {
     $("btn-upload").disabled = !$("paste-input").value.trim();
     $("btn-upload").textContent = "Generate Quiz";
@@ -958,7 +968,15 @@ $("btn-upload").addEventListener("click", async () => {
 
   try {
     let res;
-    if (sourceMode === "paste") {
+    if (sourceMode === "url") {
+      const url = $("url-input").value.trim();
+      if (!url) return;
+      res = await fetch(`${API}/generate-from-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, num_questions: parseInt($("num-questions").value) || 10 }),
+      });
+    } else if (sourceMode === "paste") {
       const text = $("paste-input").value.trim();
       if (!text) return;
       res = await fetch(`${API}/generate`, {

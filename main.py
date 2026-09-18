@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 from extraction import extract_text
 from claude_client import generate_questions, grade_answer, explain_concept, generate_choices
+from youtube import get_transcript
+from github import get_repo_content
 from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, create_flag, update_session_max_points, get_flags, update_question, delete_question
 
 ROOT = Path(__file__).parent
@@ -124,6 +126,55 @@ def generate_from_text(req: GenerateFromTextRequest):
         q["source_file"] = "Pasted text"
 
     result = create_session("Pasted text", questions)
+    return {
+        "session_id": result["session_id"],
+        "questions": result["questions"],
+    }
+
+
+class GenerateFromURLRequest(BaseModel):
+    url: str
+    num_questions: int = 10
+
+
+@app.post("/generate-from-url")
+def generate_from_url(req: GenerateFromURLRequest):
+    num_questions = max(1, min(30, req.num_questions))
+    url = req.url.strip()
+    if not url:
+        raise HTTPException(422, "No URL provided")
+
+    is_github = "github.com" in url
+    is_youtube = "youtube.com" in url or "youtu.be" in url
+
+    if not is_github and not is_youtube:
+        raise HTTPException(422, "URL must be a YouTube video or GitHub repository")
+
+    try:
+        if is_github:
+            text, source_label = get_repo_content(url)
+        else:
+            text = get_transcript(url)
+            source_label = url
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:
+        log.exception("Failed to fetch content from %s", url)
+        raise HTTPException(502, f"Could not fetch content: {e}")
+
+    try:
+        questions = generate_questions(text, num_questions)
+    except ValueError as e:
+        log.exception("Failed to parse generated questions from URL source")
+        raise HTTPException(502, f"Failed to generate questions: {e}")
+    except Exception as e:
+        log.exception("Claude API error for URL source")
+        raise HTTPException(502, f"AI service error: {e}")
+
+    for q in questions:
+        q["source_file"] = source_label
+
+    result = create_session(source_label, questions)
     return {
         "session_id": result["session_id"],
         "questions": result["questions"],
