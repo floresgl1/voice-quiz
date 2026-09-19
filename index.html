@@ -943,7 +943,6 @@ let currentIndex = 0;
 let totalPoints = 0;
 let queue = [];
 let queuePos = 0;
-let recognition = null;
 let isRecording = false;
 let sessionId = null;
 let multiFile = false;
@@ -1521,85 +1520,76 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-// --- STT ---
-function initRecognition() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showError("Speech recognition is not supported in this browser. Use Chrome.");
-    return null;
-  }
-  const rec = new SpeechRecognition();
-  rec.continuous = true;
-  rec.interimResults = true;
-  rec.lang = "en-US";
+// --- STT (Whisper via MediaRecorder) ---
+let mediaRecorder = null;
+let audioChunks = [];
 
-  let finalTranscript = "";
-
-  rec.onresult = (event) => {
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const t = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalTranscript += t;
-      } else {
-        interim += t;
-      }
-    }
-    $("transcript").textContent = finalTranscript + interim || "Listening...";
-  };
-
-  rec.onerror = (event) => {
-    if (event.error !== "aborted") {
-      if (event.error === "network") {
-        showError("Speech recognition unavailable (network error). You can type your answer below instead.");
-      } else {
-        showError(`Speech recognition error: ${event.error}`);
-      }
-    }
-    stopRecording();
-  };
-
-  rec.onend = () => {
-    if (isRecording) {
-      stopRecording();
-      if (finalTranscript.trim()) {
-        submitAnswer(finalTranscript.trim());
-      }
-    }
-  };
-
-  rec._getFinal = () => finalTranscript;
-  rec._resetFinal = () => { finalTranscript = ""; };
-
-  return rec;
-}
-
-function startRecording() {
+async function startRecording() {
   window.speechSynthesis.cancel();
-  recognition = initRecognition();
-  if (!recognition) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
 
-  isRecording = true;
-  recognition._resetFinal();
-  $("transcript").textContent = "Listening...";
-  $("btn-record").innerHTML = 'Stop <span class="key-badge">R</span>';
-  $("btn-record").classList.add("recording");
-  $("btn-skip").disabled = true;
-  recognition.start();
+    const mimeType = mediaRecorder.mimeType;
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (audioChunks.length === 0) return;
+
+      const blob = new Blob(audioChunks, { type: mimeType });
+      audioChunks = [];
+
+      $("transcript").textContent = "Transcribing...";
+      $("btn-record").disabled = true;
+
+      try {
+        const form = new FormData();
+        form.append("audio", blob, "recording.webm");
+        const res = await fetch(`${API}/transcribe`, { method: "POST", body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || "Transcription failed");
+        }
+        const { text } = await res.json();
+        if (text.trim()) {
+          $("transcript").textContent = text;
+          submitAnswer(text.trim());
+        } else {
+          $("transcript").textContent = "No speech detected. Try again or type your answer.";
+          $("btn-record").disabled = false;
+        }
+      } catch (err) {
+        showError(err.message);
+        $("transcript").textContent = "Transcription failed. Type your answer below.";
+        $("btn-record").disabled = false;
+      }
+    };
+
+    isRecording = true;
+    $("transcript").textContent = "Listening...";
+    $("btn-record").innerHTML = 'Stop <span class="key-badge">R</span>';
+    $("btn-record").classList.add("recording");
+    $("btn-skip").disabled = true;
+    mediaRecorder.start();
+  } catch (err) {
+    showError("Microphone access denied or unavailable.");
+  }
 }
 
 function stopRecording() {
   isRecording = false;
   $("btn-record").innerHTML = 'Record <span class="key-badge">R</span>';
   $("btn-record").classList.remove("recording");
-  if (recognition) {
-    const finalText = recognition._getFinal();
-    recognition.stop();
-    recognition = null;
-    if (finalText.trim()) {
-      submitAnswer(finalText.trim());
-    }
+  $("btn-skip").disabled = false;
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
   }
+  mediaRecorder = null;
 }
 
 $("btn-record").addEventListener("click", () => {
@@ -1824,11 +1814,7 @@ async function handleExplain(e) {
 // --- Flag Question ---
 $("btn-flag-question").addEventListener("click", () => {
   window.speechSynthesis.cancel();
-  if (recognition) {
-    isRecording = false;
-    recognition.stop();
-    recognition = null;
-  }
+  if (isRecording) stopRecording();
 
   const q = questions[currentIndex];
   q.status = "flagged";
@@ -1921,11 +1907,7 @@ function handleFlagGrading(e) {
 // --- Skip ---
 $("btn-skip").addEventListener("click", () => {
   window.speechSynthesis.cancel();
-  if (recognition) {
-    isRecording = false;
-    recognition.stop();
-    recognition = null;
-  }
+  if (isRecording) stopRecording();
 
   const q = questions[currentIndex];
 

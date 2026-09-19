@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -384,6 +384,20 @@ def flag_question(req: FlagRequest):
 @app.get("/flags")
 def list_flags():
     return get_flags()
+
+
+@app.post("/transcribe")
+async def transcribe(audio: UploadFile = File(...)):
+    from transcribe import transcribe_audio
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(422, "No audio data received")
+    try:
+        text = transcribe_audio(audio_bytes, audio.content_type or "audio/webm")
+    except Exception as e:
+        log.exception("Transcription failed")
+        raise HTTPException(502, f"Transcription failed: {e}")
+    return {"text": text}
 
 
 class SaveStateRequest(BaseModel):

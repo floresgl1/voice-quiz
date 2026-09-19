@@ -8,13 +8,22 @@ from prompts import build_generation_prompt, build_grading_prompt, build_explain
 
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 
-client = anthropic.Anthropic()
+_default_client = None
 
 
-def generate_questions(source_text: str, num_questions: int = 10) -> list[dict]:
+def _get_client(api_key: str | None = None) -> anthropic.Anthropic:
+    if api_key:
+        return anthropic.Anthropic(api_key=api_key)
+    global _default_client
+    if _default_client is None:
+        _default_client = anthropic.Anthropic()
+    return _default_client
+
+
+def generate_questions(source_text: str, num_questions: int = 10, api_key: str | None = None) -> list[dict]:
     prompt = build_generation_prompt(source_text, num_questions)
 
-    response = client.messages.create(
+    response = _get_client(api_key).messages.create(
         model=MODEL,
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
@@ -27,10 +36,10 @@ def generate_questions(source_text: str, num_questions: int = 10) -> list[dict]:
     return questions
 
 
-def grade_answer(question: str, expected_answer: str, user_answer: str) -> dict:
+def grade_answer(question: str, expected_answer: str, user_answer: str, api_key: str | None = None) -> dict:
     prompt = build_grading_prompt(question, expected_answer, user_answer)
 
-    response = client.messages.create(
+    response = _get_client(api_key).messages.create(
         model=MODEL,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
@@ -43,10 +52,10 @@ def grade_answer(question: str, expected_answer: str, user_answer: str) -> dict:
     return result
 
 
-def generate_choices(questions: list[dict]) -> list[list[str]]:
+def generate_choices(questions: list[dict], api_key: str | None = None) -> list[list[str]]:
     prompt = build_choices_prompt(questions)
 
-    response = client.messages.create(
+    response = _get_client(api_key).messages.create(
         model=MODEL,
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
@@ -59,10 +68,10 @@ def generate_choices(questions: list[dict]) -> list[list[str]]:
     return choices
 
 
-def generate_review_summary(missed_questions: list[dict]) -> str:
+def generate_review_summary(missed_questions: list[dict], api_key: str | None = None) -> str:
     prompt = build_review_summary_prompt(missed_questions)
 
-    response = client.messages.create(
+    response = _get_client(api_key).messages.create(
         model=MODEL,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
@@ -71,10 +80,10 @@ def generate_review_summary(missed_questions: list[dict]) -> str:
     return _extract_text(response)
 
 
-def explain_concept(question: str, expected_answer: str, user_attempts: list[str]) -> str:
+def explain_concept(question: str, expected_answer: str, user_attempts: list[str], api_key: str | None = None) -> str:
     prompt = build_explain_prompt(question, expected_answer, user_attempts)
 
-    response = client.messages.create(
+    response = _get_client(api_key).messages.create(
         model=MODEL,
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],

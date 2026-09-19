@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: voice-quiz
+    runtime: docker
+    plan: starter
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WHISPER_MODEL
+        value: base
+      - key: DB_DIR
+        value: /data
+      - key: HF_HOME
+        value: /data/hf-cache
+    disk:
+      name: voicequiz-data
+      mountPath: /data
+      sizeGB: 1

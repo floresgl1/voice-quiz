@@ -2,7 +2,7 @@ import sqlite3
 import os
 from datetime import datetime, timezone
 
-DB_DIR = os.path.join(os.path.dirname(__file__), "data")
+DB_DIR = os.environ.get("DB_DIR", os.path.join(os.path.dirname(__file__), "data"))
 DB_PATH = os.path.join(DB_DIR, "voicequiz.db")
 
 
