@@ -224,6 +224,8 @@
       overflow-x: auto;
     }
 
+    .katex { color: var(--text); }
+
     .label {
       font-size: 0.8rem;
       font-weight: 600;
@@ -675,6 +677,7 @@
       border: 1px solid var(--border-input);
       border-radius: 8px;
       background: var(--card-bg);
+      color: var(--text);
       cursor: pointer;
       font-size: 0.9rem;
       text-align: left;
@@ -1343,8 +1346,9 @@ function showQuestion() {
 function renderMcChoices(q) {
   const container = $("mc-choices");
   container.innerHTML = (q.choices || []).map((c, i) =>
-    `<button class="mc-choice" data-idx="${i}">${c}</button>`
+    `<button class="mc-choice" data-idx="${i}">${renderRichText(c)}</button>`
   ).join("");
+  applyRichFormatting(container);
 
   container.querySelectorAll(".mc-choice").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1422,9 +1426,41 @@ $("btn-preview-voice").addEventListener("click", () => {
 loadVoiceSettings();
 
 // --- TTS ---
+function mathToSpeech(text) {
+  return text
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, m) => latexToWords(m))
+    .replace(/\$([^$]+)\$/g, (_, m) => latexToWords(m))
+    .replace(/```[\s\S]*?```/g, "(code block omitted)")
+    .replace(/`([^`]+)`/g, "$1");
+}
+
+function latexToWords(tex) {
+  return tex
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1 over $2")
+    .replace(/\\sqrt\{([^}]*)\}/g, "square root of $1")
+    .replace(/\\left\(/g, "(").replace(/\\right\)/g, ")")
+    .replace(/\\left\[/g, "[").replace(/\\right\]/g, "]")
+    .replace(/\\log/g, "log").replace(/\\ln/g, "ln")
+    .replace(/\\sin/g, "sine").replace(/\\cos/g, "cosine").replace(/\\tan/g, "tangent")
+    .replace(/\\sum/g, "sum of").replace(/\\prod/g, "product of")
+    .replace(/\\infty/g, "infinity")
+    .replace(/\\pm/g, "plus or minus")
+    .replace(/\\times/g, "times").replace(/\\cdot/g, "times")
+    .replace(/\\leq/g, "less than or equal to").replace(/\\geq/g, "greater than or equal to")
+    .replace(/\\neq/g, "not equal to")
+    .replace(/\\approx/g, "approximately")
+    .replace(/\^{([^}]*)}/g, " to the power of $1")
+    .replace(/\^(\w)/g, " to the power of $1")
+    .replace(/_\{([^}]*)\}/g, " sub $1")
+    .replace(/_(\w)/g, " sub $1")
+    .replace(/[{}\\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function speak(text) {
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(mathToSpeech(text));
   if (selectedVoice) utterance.voice = selectedVoice;
   utterance.rate = speechRate;
   window.speechSynthesis.speak(utterance);
@@ -1675,6 +1711,12 @@ function applyRichFormatting(el) {
       ],
       throwOnError: false,
     });
+    if (!document.getElementById('katex-color-fix')) {
+      const s = document.createElement('style');
+      s.id = 'katex-color-fix';
+      s.textContent = '.katex, .katex .katex-html, .katex .katex-html > *, .katex .katex-html span, .katex .base, .katex .strut, .katex .mord, .katex .mop, .katex .mrel, .katex .mbin, .katex .mpunct, .katex .mopen, .katex .mclose, .katex .minner, .katex .sizing, .katex .mtable, .katex .col-align-c, .katex .vlist-t, .katex .vlist-r, .katex .vlist, .katex .pstrut { color: var(--text) !important; } .katex svg, .katex path, .katex line, .katex rect { fill: var(--text) !important; stroke: var(--text) !important; }';
+      document.head.appendChild(s);
+    }
   }
 }
 

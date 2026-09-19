@@ -78,14 +78,74 @@ def _extract_text(response) -> str:
     raise ValueError("No text block in Claude response")
 
 
+def _fix_latex_escapes(text: str) -> str:
+    result = []
+    i = 0
+    while i < len(text):
+        if text[i] == '\\' and i + 1 < len(text):
+            next_ch = text[i + 1]
+            if next_ch == '\\':
+                result.append('\\\\')
+                i += 2
+                continue
+            if next_ch == '"':
+                result.append('\\"')
+                i += 2
+                continue
+            if next_ch == 'u' and i + 5 < len(text) and all(c in '0123456789abcdefABCDEF' for c in text[i+2:i+6]):
+                result.append(text[i:i+6])
+                i += 6
+                continue
+            result.append('\\\\')
+            i += 1
+        else:
+            result.append(text[i])
+            i += 1
+    return ''.join(result)
+
+
+def _fix_newlines_in_strings(text: str) -> str:
+    result = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if escaped:
+            result.append(ch)
+            escaped = False
+            continue
+        if ch == '\\' and in_string:
+            escaped = True
+            result.append(ch)
+            continue
+        if ch == '"':
+            in_string = not in_string
+        if in_string and ch == '\n':
+            result.append('\\n')
+            continue
+        result.append(ch)
+    return ''.join(result)
+
+
 def _parse_json(text: str):
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
-    if match:
-        return json.loads(match.group(1))
+    # Extract JSON from code fence — use greedy match to handle nested backticks
+    match = re.search(r"```(?:json)?\s*\n([\s\S]*)\n\s*```\s*$", text)
+    if not match:
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    raw = match.group(1) if match else text
+
+    for fixer in [
+        lambda t: t,
+        _fix_latex_escapes,
+        lambda t: _fix_newlines_in_strings(_fix_latex_escapes(t)),
+    ]:
+        try:
+            return json.loads(fixer(raw))
+        except (json.JSONDecodeError, ValueError):
+            continue
 
     raise ValueError(f"Could not parse JSON from response: {text[:200]}")
