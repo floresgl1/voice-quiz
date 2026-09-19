@@ -61,7 +61,8 @@ def init_db():
     cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
     if "source_text" not in cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN source_text TEXT")
-        conn.commit()
+    if "quiz_state" not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN quiz_state TEXT")
 
     conn.commit()
     conn.close()
@@ -166,6 +167,20 @@ def get_flags() -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def save_quiz_state(session_id: int, state_json: str):
+    conn = _connect()
+    conn.execute("UPDATE sessions SET quiz_state = ? WHERE id = ?", (state_json, session_id))
+    conn.commit()
+    conn.close()
+
+
+def get_quiz_state(session_id: int) -> str | None:
+    conn = _connect()
+    row = conn.execute("SELECT quiz_state FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return row["quiz_state"] if row else None
 
 
 def get_source_text(session_id: int) -> str | None:

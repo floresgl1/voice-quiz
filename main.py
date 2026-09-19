@@ -15,7 +15,7 @@ from extraction import extract_text
 from claude_client import generate_questions, grade_answer, explain_concept, generate_choices
 from youtube import get_transcript
 from github import get_repo_content
-from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, get_source_text, create_flag, update_session_max_points, get_flags, update_question, delete_question
+from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, get_source_text, get_quiz_state, save_quiz_state, create_flag, update_session_max_points, get_flags, update_question, delete_question
 
 ROOT = Path(__file__).parent
 
@@ -270,6 +270,21 @@ def update_score(req: UpdateScoreRequest):
     return {"status": "ok"}
 
 
+class UpdateMaxPointsRequest(BaseModel):
+    session_id: int
+    max_points: int
+
+
+@app.post("/update-max-points")
+def update_max(req: UpdateMaxPointsRequest):
+    from database import _connect
+    conn = _connect()
+    conn.execute("UPDATE sessions SET max_points = ? WHERE id = ?", (req.max_points, req.session_id))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
 class CompleteSessionRequest(BaseModel):
     session_id: int
     total_points: float
@@ -339,6 +354,27 @@ def flag_question(req: FlagRequest):
 @app.get("/flags")
 def list_flags():
     return get_flags()
+
+
+class SaveStateRequest(BaseModel):
+    session_id: int
+    state: Optional[dict] = None
+
+
+@app.post("/save-state")
+def save_state(req: SaveStateRequest):
+    import json
+    save_quiz_state(req.session_id, json.dumps(req.state) if req.state else None)
+    return {"status": "ok"}
+
+
+@app.get("/sessions/{session_id}/state")
+def get_state(session_id: int):
+    import json
+    state_json = get_quiz_state(session_id)
+    if not state_json:
+        raise HTTPException(404, "No saved state for this session")
+    return json.loads(state_json)
 
 
 class GenerateChoicesRequest(BaseModel):

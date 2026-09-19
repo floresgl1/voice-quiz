@@ -798,6 +798,9 @@
         <label for="speed-slider">Speed: <span id="speed-value">1.0x</span></label>
         <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0">
         <button class="btn-secondary" id="btn-preview-voice" style="width: 100%; padding: 0.4rem; font-size: 0.8rem; margin-top: 0.25rem;">Preview Voice</button>
+        <label style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; cursor: pointer;">
+          <input type="checkbox" id="tts-enabled" checked> Read questions aloud
+        </label>
       </div>
       <button class="btn-secondary" id="btn-history" style="width: 100%; margin-top: 0.5rem;">View History</button>
     </div>
@@ -1296,6 +1299,26 @@ function startQuiz() {
   showQuestion();
 }
 
+async function resumeQuiz(sid) {
+  try {
+    const res = await fetch(`${API}/sessions/${sid}/state`);
+    if (!res.ok) throw new Error("No saved state found — cannot resume this session");
+    const state = await res.json();
+
+    sessionId = sid;
+    questions = state.questions;
+    queue = state.queue;
+    queuePos = state.queuePos;
+    totalPoints = state.totalPoints;
+    quizMode = state.quizMode || "voice";
+    multiFile = state.multiFile || false;
+
+    startQuiz();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
 function showQuestion() {
   currentIndex = queue[queuePos];
   const q = questions[currentIndex];
@@ -1376,15 +1399,38 @@ function persistScore() {
   }).catch(() => {});
 }
 
+function saveQuizState() {
+  if (!sessionId) return;
+  const state = {
+    questions: questions.map(q => ({
+      id: q.id, question: q.question, expected_answer: q.expected_answer,
+      topic: q.topic, difficulty: q.difficulty, source_file: q.source_file,
+      db_id: q.db_id, status: q.status, user_answer: q.user_answer,
+      judgment: q.judgment, score: q.score, explanation: q.explanation,
+      retries: q.retries, bestScore: q.bestScore, attempts: q.attempts,
+      flagged: q.flagged, choices: q.choices,
+    })),
+    queue, queuePos, totalPoints, quizMode, multiFile,
+  };
+  fetch(`${API}/save-state`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, state }),
+  }).catch(() => {});
+}
+
 // --- TTS ---
 // --- Voice Settings ---
 let selectedVoice = null;
 let speechRate = 1.0;
+let ttsEnabled = true;
 
 function loadVoiceSettings() {
   try {
     const saved = localStorage.getItem("vq-speech-rate");
     if (saved) { speechRate = parseFloat(saved); $("speed-slider").value = speechRate; $("speed-value").textContent = speechRate.toFixed(1) + "x"; }
+    const ttsSaved = localStorage.getItem("vq-tts-enabled");
+    if (ttsSaved !== null) { ttsEnabled = ttsSaved !== "false"; $("tts-enabled").checked = ttsEnabled; }
   } catch(e) {}
 }
 
@@ -1423,6 +1469,12 @@ $("btn-preview-voice").addEventListener("click", () => {
   window.speechSynthesis.speak(utterance);
 });
 
+$("tts-enabled").addEventListener("change", (e) => {
+  ttsEnabled = e.target.checked;
+  try { localStorage.setItem("vq-tts-enabled", ttsEnabled); } catch(e) {}
+  if (!ttsEnabled) window.speechSynthesis.cancel();
+});
+
 loadVoiceSettings();
 
 // --- TTS ---
@@ -1459,6 +1511,7 @@ function latexToWords(tex) {
 }
 
 function speak(text) {
+  if (!ttsEnabled) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(mathToSpeech(text));
   if (selectedVoice) utterance.voice = selectedVoice;
@@ -1613,6 +1666,7 @@ async function submitAnswer(userAnswer) {
     q.status = "graded";
 
     persistScore();
+    saveQuizState();
 
     let willRetry = false;
     if (result.judgment === "incorrect" && q.retries < 2) {
@@ -1916,6 +1970,7 @@ $("btn-skip").addEventListener("click", () => {
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
   updateScore();
+  saveQuizState();
 
   if (queuePos >= queue.length - 1) {
     $("btn-next").innerHTML = 'View Summary <span class="key-badge">N</span>';
@@ -1933,16 +1988,26 @@ $("btn-next").addEventListener("click", () => {
 });
 
 $("btn-end").addEventListener("click", () => {
-  questions.forEach(q => {
-    if (q.status === "pending") {
-      q.status = "skipped";
-      q.user_answer = null;
-      q.judgment = null;
-      q.score = 0.0;
-      q.explanation = "Question skipped.";
-    }
-  });
   showSummary();
+});
+
+window.addEventListener("beforeunload", () => {
+  if (currentScreen === "quiz" && sessionId) {
+    const state = {
+      questions: questions.map(q => ({
+        id: q.id, question: q.question, expected_answer: q.expected_answer,
+        topic: q.topic, difficulty: q.difficulty, source_file: q.source_file,
+        db_id: q.db_id, status: q.status, user_answer: q.user_answer,
+        judgment: q.judgment, score: q.score, explanation: q.explanation,
+        retries: q.retries, bestScore: q.bestScore, attempts: q.attempts,
+        flagged: q.flagged, choices: q.choices,
+      })),
+      queue, queuePos, totalPoints, quizMode, multiFile,
+    };
+    navigator.sendBeacon(`${API}/save-state`,
+      new Blob([JSON.stringify({ session_id: sessionId, state })], { type: "application/json" })
+    );
+  }
 });
 
 // --- Keyboard Shortcuts ---
@@ -1988,10 +2053,25 @@ function showSummary() {
   showScreen("summary");
 
   if (sessionId) {
+    const attemptedCount = questions.filter(q => q.status !== "pending" && !q.flagged).length;
+    const flaggedCount = questions.filter(q => q.flagged).length;
+    const effectiveMax = questions.length - flaggedCount;
+    if (attemptedCount < effectiveMax) {
+      fetch(`${API}/update-max-points`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, max_points: attemptedCount }),
+      }).catch(() => {});
+    }
     fetch(`${API}/complete-session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, total_points: totalPoints }),
+    }).catch(() => {});
+    fetch(`${API}/save-state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, state: null }),
     }).catch(() => {});
   }
 
@@ -2074,6 +2154,7 @@ $("btn-history").addEventListener("click", async () => {
       const scoreLabel = s.completed
         ? `${s.total_points} / ${s.max_points}`
         : `In progress`;
+      const resumeBtn = s.completed ? "" : `<button class="btn-resume" data-sid="${s.id}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; background: var(--primary); color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-left: 0.5rem;">Resume</button>`;
 
       return `
         <div class="session-item" data-sid="${s.id}">
@@ -2081,13 +2162,25 @@ $("btn-history").addEventListener("click", async () => {
             <p class="session-file">${s.source_file}</p>
             <p class="session-date">${date}</p>
           </div>
-          <span class="session-score ${scoreClass}">${scoreLabel}</span>
+          <div style="display: flex; align-items: center;">
+            <span class="session-score ${scoreClass}">${scoreLabel}</span>
+            ${resumeBtn}
+          </div>
         </div>
       `;
     }).join("");
 
     $("history-list").querySelectorAll(".session-item").forEach(el => {
-      el.addEventListener("click", () => showSessionDetail(parseInt(el.dataset.sid)));
+      el.addEventListener("click", (e) => {
+        if (e.target.classList.contains("btn-resume")) return;
+        showSessionDetail(parseInt(el.dataset.sid));
+      });
+    });
+    $("history-list").querySelectorAll(".btn-resume").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        resumeQuiz(parseInt(btn.dataset.sid));
+      });
     });
   } catch (err) {
     showError(err.message);

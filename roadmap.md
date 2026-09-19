@@ -96,8 +96,8 @@
 - [x] Difficulty filter — pick easy/medium/hard before starting
 - [x] Topic filter — select which topics to quiz on from the review screen
 - [x] Keyboard shortcuts — spacebar to start/stop recording, arrow keys to navigate, Enter to submit
-- [ ] Progress persistence — resume an interrupted quiz where you left off (session state in DB)
-- [ ] TTS toggle — enable/disable text-to-speech from the UI (flag in voice settings)
+- [x] Progress persistence — resume an interrupted quiz where you left off (session state in DB)
+- [x] TTS toggle — enable/disable text-to-speech from the UI (flag in voice settings)
 - [x] Dark mode
 
 ---
