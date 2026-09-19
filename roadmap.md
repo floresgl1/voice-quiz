@@ -124,12 +124,28 @@
 **Goal:** Share results and open the app to others.
 
 - [x] PDF export of session results — printable study review sheet with AI-generated review summary
-- [ ] Deployment / hosting
-- [ ] User accounts / multi-user support
+- [x] Deployment / hosting (Render, Docker, BYOK)
+- [x] User isolation — tie sessions to API key hash so users only see their own data
 
 ---
 
-## v7 — Long-Term Learning
+## v7 — Content Sources (continued)
+**Goal:** Quiz on anything you can read.
+
+- [ ] Web page ingestion — paste any article/blog URL, scrape text, generate questions
+
+---
+
+## v8 — Study Modes
+**Goal:** More ways to study beyond graded quizzes.
+
+- [ ] Flashcard mode — show question, tap to reveal answer, self-rate (no AI grading)
+- [ ] Timed quiz mode — optional per-question countdown for exam simulation
+
+---
+
+## v9 — Long-Term Learning
 **Goal:** Build a study system that tracks knowledge over time.
 
 - [ ] Spaced repetition (resurface questions you got wrong days later)
+- [ ] Analytics dashboard — scores over time, weak topics, improvement trends

@@ -63,17 +63,19 @@ def init_db():
         conn.execute("ALTER TABLE sessions ADD COLUMN source_text TEXT")
     if "quiz_state" not in cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN quiz_state TEXT")
+    if "user_hash" not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN user_hash TEXT")
 
     conn.commit()
     conn.close()
 
 
-def create_session(source_file: str, questions: list[dict], source_text: str | None = None) -> dict:
+def create_session(source_file: str, questions: list[dict], source_text: str | None = None, user_hash: str | None = None) -> dict:
     conn = _connect()
     now = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
-        "INSERT INTO sessions (created_at, source_file, max_points, source_text) VALUES (?, ?, ?, ?)",
-        (now, source_file, len(questions), source_text),
+        "INSERT INTO sessions (created_at, source_file, max_points, source_text, user_hash) VALUES (?, ?, ?, ?, ?)",
+        (now, source_file, len(questions), source_text, user_hash),
     )
     session_id = cur.lastrowid
 
@@ -190,11 +192,17 @@ def get_source_text(session_id: int) -> str | None:
     return row["source_text"] if row else None
 
 
-def get_sessions() -> list[dict]:
+def get_sessions(user_hash: str | None = None) -> list[dict]:
     conn = _connect()
-    rows = conn.execute(
-        "SELECT id, created_at, source_file, total_points, max_points, completed FROM sessions ORDER BY created_at DESC"
-    ).fetchall()
+    if user_hash:
+        rows = conn.execute(
+            "SELECT id, created_at, source_file, total_points, max_points, completed FROM sessions WHERE user_hash = ? OR user_hash IS NULL ORDER BY created_at DESC",
+            (user_hash,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, created_at, source_file, total_points, max_points, completed FROM sessions ORDER BY created_at DESC"
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

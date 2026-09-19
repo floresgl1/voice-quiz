@@ -1325,7 +1325,7 @@ function startQuiz() {
 
 async function resumeQuiz(sid) {
   try {
-    const res = await fetch(`${API}/sessions/${sid}/state`);
+    const res = await fetch(`${API}/sessions/${sid}/state`, { headers: apiHeadersNoBody() });
     if (!res.ok) throw new Error("No saved state found — cannot resume this session");
     const state = await res.json();
 
@@ -2184,7 +2184,7 @@ $("btn-history").addEventListener("click", async () => {
   $("history-list").innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading history...</p></div>`;
 
   try {
-    const res = await fetch(`${API}/sessions`);
+    const res = await fetch(`${API}/sessions`, { headers: apiHeadersNoBody() });
     if (!res.ok) throw new Error("Failed to load history");
     const sessions = await res.json();
 
@@ -2247,7 +2247,7 @@ async function showSessionDetail(sid) {
   $("detail-list").innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
 
   try {
-    const res = await fetch(`${API}/sessions/${sid}`);
+    const res = await fetch(`${API}/sessions/${sid}`, { headers: apiHeadersNoBody() });
     if (!res.ok) throw new Error("Failed to load session");
     const detail = await res.json();
 

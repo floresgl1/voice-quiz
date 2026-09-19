@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -39,6 +40,13 @@ def _api_key(header_val: str | None) -> str | None:
     if not key:
         raise HTTPException(401, "No API key provided. Enter your Anthropic API key in Settings.")
     return header_val
+
+
+def _user_hash(header_val: str | None) -> str | None:
+    key = header_val or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
 @app.on_event("startup")
@@ -106,7 +114,7 @@ async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(
 
     session_label = ", ".join(source_names)
     combined_text = "\n\n".join(all_texts)
-    result = create_session(session_label, all_questions, source_text=combined_text)
+    result = create_session(session_label, all_questions, source_text=combined_text, user_hash=_user_hash(x_api_key))
     response = {
         "session_id": result["session_id"],
         "questions": result["questions"],
@@ -141,7 +149,7 @@ def generate_from_text(req: GenerateFromTextRequest, x_api_key: Optional[str] = 
     for q in questions:
         q["source_file"] = "Pasted text"
 
-    result = create_session("Pasted text", questions, source_text=text)
+    result = create_session("Pasted text", questions, source_text=text, user_hash=_user_hash(x_api_key))
     return {
         "session_id": result["session_id"],
         "questions": result["questions"],
@@ -191,7 +199,7 @@ def generate_from_url(req: GenerateFromURLRequest, x_api_key: Optional[str] = He
     for q in questions:
         q["source_file"] = source_label
 
-    result = create_session(source_label, questions, source_text=text)
+    result = create_session(source_label, questions, source_text=text, user_hash=_user_hash(x_api_key))
     return {
         "session_id": result["session_id"],
         "questions": result["questions"],
@@ -226,7 +234,7 @@ def requiz(req: RequizRequest, x_api_key: Optional[str] = Header(None)):
     for q in questions:
         q["source_file"] = source_label
 
-    result = create_session(source_label, questions, source_text=text)
+    result = create_session(source_label, questions, source_text=text, user_hash=_user_hash(x_api_key))
     return {
         "session_id": result["session_id"],
         "questions": result["questions"],
@@ -313,8 +321,8 @@ def complete(req: CompleteSessionRequest):
 
 
 @app.get("/sessions")
-def list_sessions():
-    return get_sessions()
+def list_sessions(x_api_key: Optional[str] = Header(None)):
+    return get_sessions(user_hash=_user_hash(x_api_key))
 
 
 @app.get("/sessions/{session_id}")
