@@ -58,16 +58,21 @@ def init_db():
             created_at  TEXT    NOT NULL
         );
     """)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+    if "source_text" not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN source_text TEXT")
+        conn.commit()
+
     conn.commit()
     conn.close()
 
 
-def create_session(source_file: str, questions: list[dict]) -> dict:
+def create_session(source_file: str, questions: list[dict], source_text: str | None = None) -> dict:
     conn = _connect()
     now = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
-        "INSERT INTO sessions (created_at, source_file, max_points) VALUES (?, ?, ?)",
-        (now, source_file, len(questions)),
+        "INSERT INTO sessions (created_at, source_file, max_points, source_text) VALUES (?, ?, ?, ?)",
+        (now, source_file, len(questions), source_text),
     )
     session_id = cur.lastrowid
 
@@ -161,6 +166,13 @@ def get_flags() -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_source_text(session_id: int) -> str | None:
+    conn = _connect()
+    row = conn.execute("SELECT source_text FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return row["source_text"] if row else None
 
 
 def get_sessions() -> list[dict]:

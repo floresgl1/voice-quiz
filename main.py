@@ -15,7 +15,7 @@ from extraction import extract_text
 from claude_client import generate_questions, grade_answer, explain_concept, generate_choices
 from youtube import get_transcript
 from github import get_repo_content
-from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, create_flag, update_session_max_points, get_flags, update_question, delete_question
+from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, get_source_text, create_flag, update_session_max_points, get_flags, update_question, delete_question
 
 ROOT = Path(__file__).parent
 
@@ -52,6 +52,7 @@ def health():
 async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(10)):
     num_questions = max(1, min(30, num_questions))
     all_questions = []
+    all_texts = []
     warnings = []
     source_names = []
 
@@ -82,6 +83,7 @@ async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(
         for q in questions:
             q["source_file"] = filename
         all_questions.extend(questions)
+        all_texts.append(text)
         source_names.append(filename)
 
     if not all_questions:
@@ -91,7 +93,8 @@ async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(
         raise HTTPException(422, detail)
 
     session_label = ", ".join(source_names)
-    result = create_session(session_label, all_questions)
+    combined_text = "\n\n".join(all_texts)
+    result = create_session(session_label, all_questions, source_text=combined_text)
     response = {
         "session_id": result["session_id"],
         "questions": result["questions"],
@@ -125,7 +128,7 @@ def generate_from_text(req: GenerateFromTextRequest):
     for q in questions:
         q["source_file"] = "Pasted text"
 
-    result = create_session("Pasted text", questions)
+    result = create_session("Pasted text", questions, source_text=text)
     return {
         "session_id": result["session_id"],
         "questions": result["questions"],
@@ -174,7 +177,41 @@ def generate_from_url(req: GenerateFromURLRequest):
     for q in questions:
         q["source_file"] = source_label
 
-    result = create_session(source_label, questions)
+    result = create_session(source_label, questions, source_text=text)
+    return {
+        "session_id": result["session_id"],
+        "questions": result["questions"],
+    }
+
+
+class RequizRequest(BaseModel):
+    session_id: int
+    num_questions: int = 10
+
+
+@app.post("/requiz")
+def requiz(req: RequizRequest):
+    num_questions = max(1, min(30, req.num_questions))
+    text = get_source_text(req.session_id)
+    if not text:
+        raise HTTPException(404, "No source text found for this session")
+
+    detail = get_session_detail(req.session_id)
+    source_label = detail["source_file"] if detail else "Re-quiz"
+
+    try:
+        questions = generate_questions(text, num_questions)
+    except ValueError as e:
+        log.exception("Failed to parse re-quiz questions")
+        raise HTTPException(502, f"Failed to generate questions: {e}")
+    except Exception as e:
+        log.exception("Claude API error during re-quiz")
+        raise HTTPException(502, f"AI service error: {e}")
+
+    for q in questions:
+        q["source_file"] = source_label
+
+    result = create_session(source_label, questions, source_text=text)
     return {
         "session_id": result["session_id"],
         "questions": result["questions"],

@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Voice Quiz</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
     :root {
       --bg: #f5f5f5;
@@ -188,6 +193,35 @@
       font-size: 1.1rem;
       line-height: 1.5;
       margin-bottom: 1rem;
+    }
+
+    code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    pre {
+      background: var(--pre-bg);
+      color: var(--pre-text);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      white-space: pre;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+      font-size: 0.85em;
+    }
+
+    .katex-display {
+      margin: 0.5rem 0;
+      overflow-x: auto;
     }
 
     .label {
@@ -857,6 +891,7 @@
         <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="final-score"></p>
         <div id="summary-list"></div>
       </div>
+      <button class="btn-secondary" id="btn-requiz" style="width: 100%; margin-top: 0.5rem;">Re-quiz Same Material</button>
       <button class="btn-primary" id="btn-restart" style="width: 100%; margin-top: 0.5rem;">Start New Quiz</button>
     </div>
 
@@ -881,6 +916,7 @@
         <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="detail-score"></p>
         <div id="detail-list"></div>
       </div>
+      <button class="btn-secondary" id="btn-requiz-detail" style="width: 100%; margin-top: 0.5rem;">Re-quiz Same Material</button>
       <button class="btn-secondary" id="btn-back-history" style="width: 100%; margin-top: 0.5rem;">Back to History</button>
     </div>
 
@@ -1116,7 +1152,7 @@ function renderReviewList() {
         <div class="review-header">
           <span class="review-num">${i + 1}</span>
           <div class="review-body">
-            <p class="review-q-text">${q.question}</p>
+            <p class="review-q-text">${renderRichText(q.question)}</p>
             <div class="review-meta">${srcTag}${topicTag}${diffTag}</div>
           </div>
           <div class="review-actions">
@@ -1139,6 +1175,7 @@ function renderReviewList() {
       </div>
     `;
   }).join("");
+  applyRichFormatting(list);
 
   list.querySelectorAll(".btn-edit-q").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -1260,7 +1297,8 @@ function showQuestion() {
   currentIndex = queue[queuePos];
   const q = questions[currentIndex];
   const retryLabel = q.retries > 0 ? ` (Retry ${q.retries}/2)` : "";
-  $("question-text").textContent = q.question;
+  $("question-text").innerHTML = renderRichText(q.question);
+  applyRichFormatting($("question-text"));
   $("progress").textContent = `Question ${queuePos + 1} / ${queue.length}${retryLabel}`;
   $("source-label").textContent = multiFile && q.source_file ? `From: ${q.source_file}` : "";
   updateScore();
@@ -1599,6 +1637,7 @@ function showFeedback(fb) {
     $("btn-explain").addEventListener("click", handleExplain);
   }
   $("btn-flag-grading").addEventListener("click", handleFlagGrading);
+  applyRichFormatting($("feedback-section"));
   $("feedback-section").classList.remove("hidden");
   $("next-section").classList.remove("hidden");
   updateScore();
@@ -1608,17 +1647,40 @@ function showFeedback(fb) {
   }
 }
 
-// --- Explain ---
-function formatExplanation(text) {
+// --- Rich Text Rendering ---
+function renderRichText(text) {
   let html = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${code.trimEnd()}</code></pre>`;
+    const langClass = lang ? ` class="language-${lang}"` : "";
+    return `<pre><code${langClass}>${code.trimEnd()}</code></pre>`;
   });
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
   return html;
+}
+
+function applyRichFormatting(el) {
+  if (typeof hljs !== "undefined") {
+    el.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
+  }
+  if (typeof renderMathInElement !== "undefined") {
+    renderMathInElement(el, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true },
+      ],
+      throwOnError: false,
+    });
+  }
+}
+
+// --- Explain ---
+function formatExplanation(text) {
+  return renderRichText(text);
 }
 
 async function handleExplain(e) {
@@ -1653,6 +1715,7 @@ async function handleExplain(e) {
       <div class="explain-body">${formatExplanation(data.explanation)}</div>
     `;
     $("feedback-section").querySelector(".feedback").appendChild(explainDiv);
+    applyRichFormatting(explainDiv);
   } catch (err) {
     showError(err.message);
     btn.disabled = false;
@@ -1928,6 +1991,7 @@ function showSummary() {
   } else {
     list.innerHTML = questions.map((q, i) => renderQuestionItem(q, i + 1)).join("");
   }
+  applyRichFormatting(list);
 }
 
 $("btn-restart").addEventListener("click", () => {
@@ -1993,6 +2057,7 @@ $("btn-back-upload").addEventListener("click", () => showScreen("upload"));
 
 // --- Session Detail ---
 async function showSessionDetail(sid) {
+  detailSessionId = sid;
   showScreen("session-detail");
   $("detail-header").textContent = "Loading...";
   $("detail-score").textContent = "";
@@ -2028,6 +2093,7 @@ async function showSessionDetail(sid) {
         </div>
       `;
     }).join("");
+    applyRichFormatting($("detail-list"));
   } catch (err) {
     showError(err.message);
     showScreen("history");
@@ -2036,6 +2102,45 @@ async function showSessionDetail(sid) {
 
 $("btn-back-history").addEventListener("click", () => {
   $("btn-history").click();
+});
+
+async function doRequiz(sid) {
+  showScreen("loading");
+  try {
+    const res = await fetch(`${API}/requiz`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sid, num_questions: 10 }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Re-quiz failed");
+    }
+    const data = await res.json();
+    sessionId = data.session_id;
+    questions = data.questions;
+    multiFile = new Set(questions.map(q => q.source_file)).size > 1;
+    questions.forEach(q => {
+      q.status = "pending";
+      q.retries = 0;
+      q.bestScore = 0;
+      q.attempts = [];
+    });
+    queue = questions.map((_, i) => i);
+    queuePos = 0;
+    totalPoints = 0;
+    showReview();
+  } catch (e) {
+    showError(e.message);
+    showScreen("upload");
+  }
+}
+
+$("btn-requiz").addEventListener("click", () => doRequiz(sessionId));
+
+let detailSessionId = null;
+$("btn-requiz-detail").addEventListener("click", () => {
+  if (detailSessionId) doRequiz(detailSessionId);
 });
 </script>
 </body>

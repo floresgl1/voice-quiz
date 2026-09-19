@@ -15,6 +15,8 @@ Rules:
 - Each question should be answerable from the source material
 - Expected answers should be 1-3 sentences
 - If the source material is too short for {num_questions} questions, generate as many as the material supports
+- When the source contains math, formulas, or equations, use LaTeX notation in questions and answers: inline math with $...$ and display math with $$...$$
+- When the source contains code, use triple-backtick code blocks with the language name (e.g. ```python) in questions and answers
 
 Source material:
 {source_text}"""
@@ -38,7 +40,9 @@ Grading guidelines:
 - Be lenient with phrasing — the answer was spoken aloud and transcribed, so minor wording differences are expected
 - "correct" means the student captured the key concept(s), even if worded differently
 - "partially_correct" means the student got some key points but missed others
-- "incorrect" means the answer is wrong or doesn't address the question"""
+- "incorrect" means the answer is wrong or doesn't address the question
+- Use LaTeX ($...$ for inline, $$...$$ for display) for any math in the explanation
+- Use triple-backtick code blocks for any code in the explanation"""
 
 
 def build_choices_prompt(questions: list[dict]) -> str:

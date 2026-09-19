@@ -90,32 +90,32 @@
 ## v3 — Quiz Customization & UX Polish
 **Goal:** Make daily study sessions smoother with more control and better ergonomics.
 
-- [ ] Configurable question count
-- [ ] Custom voice selection and speech rate
-- [ ] Multiple answer modes (multiple choice, typed, voice)
-- [ ] Difficulty filter — pick easy/medium/hard before starting
-- [ ] Topic filter — select which topics to quiz on from the review screen
-- [ ] Keyboard shortcuts — spacebar to start/stop recording, arrow keys to navigate, Enter to submit
+- [x] Configurable question count
+- [x] Custom voice selection and speech rate
+- [x] Multiple answer modes (multiple choice, typed, voice)
+- [x] Difficulty filter — pick easy/medium/hard before starting
+- [x] Topic filter — select which topics to quiz on from the review screen
+- [x] Keyboard shortcuts — spacebar to start/stop recording, arrow keys to navigate, Enter to submit
 - [ ] Progress persistence — resume an interrupted quiz where you left off (session state in DB)
-- [ ] Dark mode
+- [x] Dark mode
 
 ---
 
 ## v4 — Content Sources
 **Goal:** Expand what you can quiz on beyond uploaded files.
 
-- [ ] YouTube transcript ingestion — paste a URL, pull the transcript, generate questions
-- [ ] GitHub repo ingestion (paste a URL, filter relevant files, chunk for LLM context)
-- [ ] Plain text / paste input — skip file upload, just paste notes or text
-- [ ] Re-quiz from the same source with fresh questions
+- [x] YouTube transcript ingestion — paste a URL, pull the transcript, generate questions
+- [x] GitHub repo ingestion (paste a URL, filter relevant files, chunk for LLM context)
+- [x] Plain text / paste input — skip file upload, just paste notes or text
+- [x] Re-quiz from the same source with fresh questions
 
 ---
 
 ## v5 — Rich Display
 **Goal:** Render technical content properly in questions and explanations.
 
-- [ ] Rich question formatting (KaTeX for math, inline code styling)
-- [ ] Code syntax highlighting (Prism.js or highlight.js)
+- [x] Rich question formatting (KaTeX for math, inline code styling)
+- [x] Code syntax highlighting (highlight.js)
 
 ---
 
