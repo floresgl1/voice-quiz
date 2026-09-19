@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +34,13 @@ app.add_middleware(
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
 
+def _api_key(header_val: str | None) -> str | None:
+    key = header_val or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise HTTPException(401, "No API key provided. Enter your Anthropic API key in Settings.")
+    return header_val
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
@@ -45,11 +53,15 @@ def index():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "has_server_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
+    }
 
 
 @app.post("/upload")
-async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(10)):
+async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(10), x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     num_questions = max(1, min(30, num_questions))
     all_questions = []
     all_texts = []
@@ -70,7 +82,7 @@ async def upload(files: list[UploadFile] = File(...), num_questions: int = Form(
             continue
 
         try:
-            questions = generate_questions(text, num_questions)
+            questions = generate_questions(text, num_questions, api_key=api_key)
         except ValueError as e:
             log.exception("Failed to parse generated questions for %s", filename)
             warnings.append(f"{filename}: failed to generate questions")
@@ -110,14 +122,15 @@ class GenerateFromTextRequest(BaseModel):
 
 
 @app.post("/generate")
-def generate_from_text(req: GenerateFromTextRequest):
+def generate_from_text(req: GenerateFromTextRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     num_questions = max(1, min(30, req.num_questions))
     text = req.text.strip()
     if not text:
         raise HTTPException(422, "No text provided")
 
     try:
-        questions = generate_questions(text, num_questions)
+        questions = generate_questions(text, num_questions, api_key=api_key)
     except ValueError as e:
         log.exception("Failed to parse generated questions from pasted text")
         raise HTTPException(502, f"Failed to generate questions: {e}")
@@ -141,7 +154,8 @@ class GenerateFromURLRequest(BaseModel):
 
 
 @app.post("/generate-from-url")
-def generate_from_url(req: GenerateFromURLRequest):
+def generate_from_url(req: GenerateFromURLRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     num_questions = max(1, min(30, req.num_questions))
     url = req.url.strip()
     if not url:
@@ -166,7 +180,7 @@ def generate_from_url(req: GenerateFromURLRequest):
         raise HTTPException(502, f"Could not fetch content: {e}")
 
     try:
-        questions = generate_questions(text, num_questions)
+        questions = generate_questions(text, num_questions, api_key=api_key)
     except ValueError as e:
         log.exception("Failed to parse generated questions from URL source")
         raise HTTPException(502, f"Failed to generate questions: {e}")
@@ -190,7 +204,8 @@ class RequizRequest(BaseModel):
 
 
 @app.post("/requiz")
-def requiz(req: RequizRequest):
+def requiz(req: RequizRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     num_questions = max(1, min(30, req.num_questions))
     text = get_source_text(req.session_id)
     if not text:
@@ -200,7 +215,7 @@ def requiz(req: RequizRequest):
     source_label = detail["source_file"] if detail else "Re-quiz"
 
     try:
-        questions = generate_questions(text, num_questions)
+        questions = generate_questions(text, num_questions, api_key=api_key)
     except ValueError as e:
         log.exception("Failed to parse re-quiz questions")
         raise HTTPException(502, f"Failed to generate questions: {e}")
@@ -228,9 +243,10 @@ class GradeRequest(BaseModel):
 
 
 @app.post("/grade")
-def grade(req: GradeRequest):
+def grade(req: GradeRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     try:
-        result = grade_answer(req.question, req.expected_answer, req.user_answer)
+        result = grade_answer(req.question, req.expected_answer, req.user_answer, api_key=api_key)
     except ValueError as e:
         log.exception("Failed to parse grading response")
         raise HTTPException(502, f"Failed to grade answer: {e}")
@@ -310,7 +326,8 @@ def session_detail(session_id: int):
 
 
 @app.get("/sessions/{session_id}/export-pdf")
-def export_pdf(session_id: int):
+def export_pdf(session_id: int, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     from pdf_export import generate_study_sheet
 
     detail = get_session_detail(session_id)
@@ -326,7 +343,7 @@ def export_pdf(session_id: int):
     review_summary = None
     if missed:
         try:
-            review_summary = generate_review_summary(missed)
+            review_summary = generate_review_summary(missed, api_key=api_key)
         except Exception:
             log.exception("Failed to generate review summary")
 
@@ -426,9 +443,10 @@ class GenerateChoicesRequest(BaseModel):
 
 
 @app.post("/generate-choices")
-def gen_choices(req: GenerateChoicesRequest):
+def gen_choices(req: GenerateChoicesRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     try:
-        choices = generate_choices(req.questions)
+        choices = generate_choices(req.questions, api_key=api_key)
     except Exception as e:
         log.exception("Failed to generate MC choices")
         raise HTTPException(502, f"AI service error: {e}")
@@ -442,9 +460,10 @@ class ExplainRequest(BaseModel):
 
 
 @app.post("/explain")
-def explain(req: ExplainRequest):
+def explain(req: ExplainRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
     try:
-        explanation = explain_concept(req.question, req.expected_answer, req.user_attempts)
+        explanation = explain_concept(req.question, req.expected_answer, req.user_attempts, api_key=api_key)
     except Exception as e:
         log.exception("Claude API error during explanation")
         raise HTTPException(502, f"AI service error: {e}")

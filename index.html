@@ -791,8 +791,15 @@
         </div>
         <button class="btn-primary" id="btn-upload" disabled>Generate Quiz</button>
       </div>
-      <button class="settings-toggle" id="btn-settings-toggle">&#9881; Voice Settings</button>
+      <button class="settings-toggle" id="btn-settings-toggle">&#9881; Settings</button>
       <div id="settings-panel" class="settings-panel hidden">
+        <label for="api-key-input">Anthropic API Key</label>
+        <div style="display: flex; gap: 0.4rem;">
+          <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex: 1; font-size: 0.85rem; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-input); background: var(--surface); color: var(--text);">
+          <button class="btn-secondary" id="btn-save-key" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Save</button>
+        </div>
+        <p id="api-key-status" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;"></p>
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 0.75rem 0;">
         <label for="voice-select">Voice</label>
         <select id="voice-select"><option>Loading voices...</option></select>
         <label for="speed-slider">Speed: <span id="speed-value">1.0x</span></label>
@@ -937,6 +944,22 @@
 <script>
 const API = "";
 
+// --- API Key ---
+let userApiKey = "";
+try { userApiKey = localStorage.getItem("vq-api-key") || ""; } catch(e) {}
+
+function apiHeaders(extra = {}) {
+  const h = { "Content-Type": "application/json", ...extra };
+  if (userApiKey) h["X-Api-Key"] = userApiKey;
+  return h;
+}
+
+function apiHeadersNoBody(extra = {}) {
+  const h = { ...extra };
+  if (userApiKey) h["X-Api-Key"] = userApiKey;
+  return h;
+}
+
 // --- State ---
 let questions = [];
 let currentIndex = 0;
@@ -1016,7 +1039,7 @@ $("btn-upload").addEventListener("click", async () => {
       if (!url) return;
       res = await fetch(`${API}/generate-from-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ url, num_questions: parseInt($("num-questions").value) || 10 }),
       });
     } else if (sourceMode === "paste") {
@@ -1024,7 +1047,7 @@ $("btn-upload").addEventListener("click", async () => {
       if (!text) return;
       res = await fetch(`${API}/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({ text, num_questions: parseInt($("num-questions").value) || 10 }),
       });
     } else {
@@ -1035,7 +1058,7 @@ $("btn-upload").addEventListener("click", async () => {
         form.append("files", file);
       }
       form.append("num_questions", $("num-questions").value);
-      res = await fetch(`${API}/upload`, { method: "POST", body: form });
+      res = await fetch(`${API}/upload`, { method: "POST", body: form, headers: apiHeadersNoBody() });
     }
 
     if (!res.ok) {
@@ -1265,7 +1288,7 @@ $("btn-start-quiz").addEventListener("click", async () => {
         const qsForChoices = filtered.map(i => ({ question: questions[i].question, expected_answer: questions[i].expected_answer }));
         const res = await fetch(`${API}/generate-choices`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: apiHeaders(),
           body: JSON.stringify({ questions: qsForChoices }),
         });
         if (!res.ok) throw new Error("Failed to generate choices");
@@ -1462,6 +1485,44 @@ $("btn-settings-toggle").addEventListener("click", () => {
   $("settings-panel").classList.toggle("hidden");
 });
 
+// --- API Key ---
+(async function checkApiKey() {
+  if (userApiKey) {
+    $("api-key-input").value = userApiKey;
+    $("api-key-status").textContent = "Key saved locally.";
+    $("api-key-status").style.color = "var(--success)";
+  } else {
+    try {
+      const res = await fetch(`${API}/health`);
+      const data = await res.json();
+      if (data.has_server_key) {
+        $("api-key-status").textContent = "Server key configured — your own key is optional.";
+      } else {
+        $("api-key-status").textContent = "No API key set. Enter your Anthropic key to use the app.";
+        $("api-key-status").style.color = "var(--warning)";
+      }
+    } catch(e) {}
+  }
+})();
+
+$("btn-save-key").addEventListener("click", () => {
+  const key = $("api-key-input").value.trim();
+  if (key && !key.startsWith("sk-ant-")) {
+    $("api-key-status").textContent = "Key should start with sk-ant-";
+    $("api-key-status").style.color = "var(--danger)";
+    return;
+  }
+  userApiKey = key;
+  try { localStorage.setItem("vq-api-key", key); } catch(e) {}
+  if (key) {
+    $("api-key-status").textContent = "Key saved locally.";
+    $("api-key-status").style.color = "var(--success)";
+  } else {
+    $("api-key-status").textContent = "Key cleared.";
+    $("api-key-status").style.color = "var(--text-muted)";
+  }
+});
+
 $("btn-preview-voice").addEventListener("click", () => {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance("This is how your quiz questions will sound.");
@@ -1628,7 +1689,7 @@ async function submitAnswer(userAnswer) {
   try {
     const res = await fetch(`${API}/grade`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify({
         question: q.question,
         expected_answer: q.expected_answer,
@@ -1781,7 +1842,7 @@ async function handleExplain(e) {
   try {
     const res = await fetch(`${API}/explain`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify({
         question: q.question,
         expected_answer: q.expected_answer,
@@ -2231,7 +2292,7 @@ async function doRequiz(sid) {
   try {
     const res = await fetch(`${API}/requiz`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders(),
       body: JSON.stringify({ session_id: sid, num_questions: 10 }),
     });
     if (!res.ok) {
@@ -2266,7 +2327,7 @@ function exportPdf(sid) {
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Generating study sheet...";
-  fetch(`${API}/sessions/${sid}/export-pdf`)
+  fetch(`${API}/sessions/${sid}/export-pdf`, { headers: apiHeadersNoBody() })
     .then(res => {
       if (!res.ok) throw new Error("Export failed");
       return res.blob();
