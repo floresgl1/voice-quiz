@@ -8,11 +8,11 @@ from typing import Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from extraction import extract_text
-from claude_client import generate_questions, grade_answer, explain_concept, generate_choices
+from claude_client import generate_questions, grade_answer, explain_concept, generate_choices, generate_review_summary
 from youtube import get_transcript
 from github import get_repo_content
 from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, get_source_text, get_quiz_state, save_quiz_state, create_flag, update_session_max_points, get_flags, update_question, delete_question
@@ -307,6 +307,36 @@ def session_detail(session_id: int):
     if not detail:
         raise HTTPException(404, "Session not found")
     return detail
+
+
+@app.get("/sessions/{session_id}/export-pdf")
+def export_pdf(session_id: int):
+    from pdf_export import generate_study_sheet
+
+    detail = get_session_detail(session_id)
+    if not detail:
+        raise HTTPException(404, "Session not found")
+
+    questions = detail.get("questions", [])
+    missed = [
+        q for q in questions
+        if not q.get("flag") and q.get("attempts") and q["best_score"] < 1.0
+    ]
+
+    review_summary = None
+    if missed:
+        try:
+            review_summary = generate_review_summary(missed)
+        except Exception:
+            log.exception("Failed to generate review summary")
+
+    pdf_bytes = generate_study_sheet(detail, review_summary)
+    filename = f"study-sheet-{session_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 class UpdateQuestionRequest(BaseModel):

@@ -4,7 +4,7 @@ import re
 
 import anthropic
 
-from prompts import build_generation_prompt, build_grading_prompt, build_explain_prompt, build_choices_prompt
+from prompts import build_generation_prompt, build_grading_prompt, build_explain_prompt, build_choices_prompt, build_review_summary_prompt
 
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 
@@ -57,6 +57,18 @@ def generate_choices(questions: list[dict]) -> list[list[str]]:
     if not isinstance(choices, list):
         raise ValueError("Expected a JSON array of choice arrays")
     return choices
+
+
+def generate_review_summary(missed_questions: list[dict]) -> str:
+    prompt = build_review_summary_prompt(missed_questions)
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return _extract_text(response)
 
 
 def explain_concept(question: str, expected_answer: str, user_attempts: list[str]) -> str:

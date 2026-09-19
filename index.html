@@ -897,6 +897,7 @@
         <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="final-score"></p>
         <div id="summary-list"></div>
       </div>
+      <button class="btn-secondary" id="btn-export-pdf" style="width: 100%; margin-top: 0.5rem;">Export Study Sheet (PDF)</button>
       <button class="btn-secondary" id="btn-requiz" style="width: 100%; margin-top: 0.5rem;">Re-quiz Same Material</button>
       <button class="btn-primary" id="btn-restart" style="width: 100%; margin-top: 0.5rem;">Start New Quiz</button>
     </div>
@@ -922,6 +923,7 @@
         <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="detail-score"></p>
         <div id="detail-list"></div>
       </div>
+      <button class="btn-secondary" id="btn-export-detail" style="width: 100%; margin-top: 0.5rem;">Export Study Sheet (PDF)</button>
       <button class="btn-secondary" id="btn-requiz-detail" style="width: 100%; margin-top: 0.5rem;">Re-quiz Same Material</button>
       <button class="btn-secondary" id="btn-back-history" style="width: 100%; margin-top: 0.5rem;">Back to History</button>
     </div>
@@ -2075,8 +2077,9 @@ function showSummary() {
     }).catch(() => {});
   }
 
+  const attempted = questions.filter(q => q.status !== "pending");
   const flaggedCount = questions.filter(q => q.flagged).length;
-  const maxPoints = questions.length - flaggedCount;
+  const maxPoints = attempted.filter(q => !q.flagged).length;
   $("final-score").textContent = `${totalPoints} / ${maxPoints} points`;
 
   const list = $("summary-list");
@@ -2099,9 +2102,11 @@ function showSummary() {
     `;
   }
 
+  const displayQuestions = attempted.length > 0 ? attempted : questions;
+
   if (multiFile) {
     const groups = {};
-    questions.forEach((q, i) => {
+    displayQuestions.forEach((q, i) => {
       const src = q.source_file || "Unknown";
       if (!groups[src]) groups[src] = [];
       groups[src].push({ q, num: i + 1 });
@@ -2111,7 +2116,7 @@ function showSummary() {
         items.map(({ q, num }) => renderQuestionItem(q, num)).join("");
     }).join("");
   } else {
-    list.innerHTML = questions.map((q, i) => renderQuestionItem(q, i + 1)).join("");
+    list.innerHTML = displayQuestions.map((q, i) => renderQuestionItem(q, i + 1)).join("");
   }
   applyRichFormatting(list);
 }
@@ -2273,7 +2278,36 @@ async function doRequiz(sid) {
 
 $("btn-requiz").addEventListener("click", () => doRequiz(sessionId));
 
+function exportPdf(sid) {
+  if (!sid) return;
+  const btn = event.target;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Generating study sheet...";
+  fetch(`${API}/sessions/${sid}/export-pdf`)
+    .then(res => {
+      if (!res.ok) throw new Error("Export failed");
+      return res.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `study-sheet-${sid}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(err => showError(err.message))
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = origText;
+    });
+}
+
+$("btn-export-pdf").addEventListener("click", (e) => exportPdf(sessionId));
+
 let detailSessionId = null;
+$("btn-export-detail").addEventListener("click", (e) => exportPdf(detailSessionId));
 $("btn-requiz-detail").addEventListener("click", () => {
   if (detailSessionId) doRequiz(detailSessionId);
 });

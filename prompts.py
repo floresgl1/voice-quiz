@@ -55,6 +55,27 @@ Questions:
 {q_list}"""
 
 
+def build_review_summary_prompt(missed_questions: list[dict]) -> str:
+    items = "\n".join(
+        f'{i+1}. Topic: {q.get("topic", "General")}\n'
+        f'   Question: {q["question"]}\n'
+        f'   Expected answer: {q["expected_answer"]}\n'
+        f'   Student answered: {q.get("user_answer", "N/A")}'
+        for i, q in enumerate(missed_questions)
+    )
+    return f"""A student just completed a quiz and got the following questions wrong or only partially correct. Based on these missed questions, write a concise study review.
+
+Missed/partial questions:
+{items}
+
+Write 3-5 bullet points summarizing the key concepts the student needs to review. Each bullet should:
+- Name the specific concept or topic
+- Give a one-sentence explanation of what to focus on
+- Be actionable (e.g. "Review how X works" not just "X")
+
+Return ONLY the bullet points as plain text, one per line, starting with "- ". Keep it concise and useful — this goes on a printed study sheet. Do NOT use LaTeX or code blocks."""
+
+
 def build_explain_prompt(question: str, expected_answer: str, user_attempts: list[str]) -> str:
     attempts_text = "\n".join(f"- Attempt {i+1}: {a}" for i, a in enumerate(user_attempts))
     return f"""You are a patient tutor helping a student understand a concept they struggled with on a quiz. They attempted this question multiple times and still didn't get it right.

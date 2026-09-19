@@ -123,8 +123,7 @@
 ## v6 — Export & Sharing
 **Goal:** Share results and open the app to others.
 
-- [ ] Export / share session results
-- [ ] PDF export of session results — printable study review sheet
+- [x] PDF export of session results — printable study review sheet with AI-generated review summary
 - [ ] Deployment / hosting
 - [ ] User accounts / multi-user support
 
