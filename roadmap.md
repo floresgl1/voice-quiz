@@ -117,6 +117,7 @@
 
 - [x] Rich question formatting (KaTeX for math, inline code styling)
 - [x] Code syntax highlighting (highlight.js)
+- [x] Circuit diagrams — Claude attaches a sanitized inline SVG schematic to circuit questions, with a spoken description for TTS and grading
 
 ---
 

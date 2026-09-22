@@ -66,6 +66,12 @@ def init_db():
     if "user_hash" not in cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN user_hash TEXT")
 
+    qcols = {row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()}
+    if "diagram" not in qcols:
+        conn.execute("ALTER TABLE questions ADD COLUMN diagram TEXT")
+    if "diagram_alt" not in qcols:
+        conn.execute("ALTER TABLE questions ADD COLUMN diagram_alt TEXT")
+
     conn.commit()
     conn.close()
 
@@ -82,8 +88,9 @@ def create_session(source_file: str, questions: list[dict], source_text: str | N
     db_questions = []
     for i, q in enumerate(questions):
         cur = conn.execute(
-            "INSERT INTO questions (session_id, position, question, expected_answer, topic, difficulty, source_file) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (session_id, i + 1, q["question"], q["expected_answer"], q.get("topic"), q.get("difficulty"), q.get("source_file")),
+            "INSERT INTO questions (session_id, position, question, expected_answer, topic, difficulty, source_file, diagram, diagram_alt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (session_id, i + 1, q["question"], q["expected_answer"], q.get("topic"), q.get("difficulty"),
+             q.get("source_file"), q.get("diagram"), q.get("diagram_alt")),
         )
         db_questions.append({**q, "db_id": cur.lastrowid})
 
@@ -218,7 +225,7 @@ def get_session_detail(session_id: int) -> dict | None:
         return None
 
     questions = conn.execute(
-        "SELECT id, position, question, expected_answer, topic, difficulty, source_file FROM questions WHERE session_id = ? ORDER BY position",
+        "SELECT id, position, question, expected_answer, topic, difficulty, source_file, diagram, diagram_alt FROM questions WHERE session_id = ? ORDER BY position",
         (session_id,),
     ).fetchall()
 

@@ -36,6 +36,21 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
+def _diagram_note(pdf, q):
+    """Describe a circuit diagram in words.
+
+    The on-screen diagram is inline SVG, but fpdf2's SVG support ignores <text>,
+    which would strip every component label from a printed schematic. The
+    description is lossy but honest.
+    """
+    alt = q.get("diagram_alt")
+    if not alt:
+        return
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(90, 90, 90)
+    pdf.multi_cell(0, 5, f"Circuit shown: {_clean_text(alt)}", **NX)
+
+
 def generate_study_sheet(session: dict, review_summary: str | None = None) -> bytes:
     pdf = StudySheetPDF()
     pdf.alias_nb_pages()
@@ -119,6 +134,7 @@ def generate_study_sheet(session: dict, review_summary: str | None = None) -> by
                 pdf.set_font("Helvetica", "B", 10)
                 pdf.set_text_color(30, 30, 30)
                 pdf.multi_cell(0, 5, f"Q: {_clean_text(q['question'])}", **NX)
+                _diagram_note(pdf, q)
 
                 pdf.set_font("Helvetica", "I", 9)
                 color = (200, 140, 0) if best >= 0.5 else (200, 50, 50)
@@ -156,6 +172,7 @@ def generate_study_sheet(session: dict, review_summary: str | None = None) -> by
                 pdf.set_font("Helvetica", "", 9)
                 pdf.set_text_color(30, 30, 30)
                 pdf.multi_cell(0, 5, f"  {_clean_text(q['question'])}", **NX)
+                _diagram_note(pdf, q)
                 pdf.ln(1)
 
         pdf.ln(4)

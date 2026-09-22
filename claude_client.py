@@ -4,6 +4,7 @@ import re
 
 import anthropic
 
+from svg_sanitize import sanitize_svg
 from prompts import build_generation_prompt, build_grading_prompt, build_explain_prompt, build_choices_prompt, build_review_summary_prompt
 
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
@@ -25,7 +26,8 @@ def generate_questions(source_text: str, num_questions: int = 10, api_key: str |
 
     response = _get_client(api_key).messages.create(
         model=MODEL,
-        max_tokens=4096,
+        # Circuit diagrams are inline SVG, which is token-hungry.
+        max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -33,11 +35,24 @@ def generate_questions(source_text: str, num_questions: int = 10, api_key: str |
     questions = _parse_json(text)
     if not isinstance(questions, list):
         raise ValueError("Expected a JSON array of questions")
+
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+        diagram = sanitize_svg(q.get("diagram"))
+        if diagram and q.get("diagram_alt"):
+            q["diagram"] = diagram
+        else:
+            # An unusable or unlabelled diagram is dropped; the question still works.
+            q.pop("diagram", None)
+            q.pop("diagram_alt", None)
+
     return questions
 
 
-def grade_answer(question: str, expected_answer: str, user_answer: str, api_key: str | None = None) -> dict:
-    prompt = build_grading_prompt(question, expected_answer, user_answer)
+def grade_answer(question: str, expected_answer: str, user_answer: str, api_key: str | None = None,
+                 diagram_alt: str | None = None) -> dict:
+    prompt = build_grading_prompt(question, expected_answer, user_answer, diagram_alt)
 
     response = _get_client(api_key).messages.create(
         model=MODEL,
@@ -80,8 +95,9 @@ def generate_review_summary(missed_questions: list[dict], api_key: str | None = 
     return _extract_text(response)
 
 
-def explain_concept(question: str, expected_answer: str, user_attempts: list[str], api_key: str | None = None) -> str:
-    prompt = build_explain_prompt(question, expected_answer, user_attempts)
+def explain_concept(question: str, expected_answer: str, user_attempts: list[str], api_key: str | None = None,
+                    diagram_alt: str | None = None) -> str:
+    prompt = build_explain_prompt(question, expected_answer, user_attempts, diagram_alt)
 
     response = _get_client(api_key).messages.create(
         model=MODEL,

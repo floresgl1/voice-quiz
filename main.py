@@ -56,7 +56,8 @@ def on_startup():
 
 @app.get("/")
 def index():
-    return FileResponse(ROOT / "index.html")
+    # The whole app is one file; never let a browser serve a stale copy of it.
+    return FileResponse(ROOT / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/health")
@@ -245,6 +246,7 @@ class GradeRequest(BaseModel):
     question: str
     expected_answer: str
     user_answer: str
+    diagram_alt: Optional[str] = None
     session_id: Optional[int] = None
     question_db_id: Optional[int] = None
     attempt_num: Optional[int] = None
@@ -254,7 +256,8 @@ class GradeRequest(BaseModel):
 def grade(req: GradeRequest, x_api_key: Optional[str] = Header(None)):
     api_key = _api_key(x_api_key)
     try:
-        result = grade_answer(req.question, req.expected_answer, req.user_answer, api_key=api_key)
+        result = grade_answer(req.question, req.expected_answer, req.user_answer, api_key=api_key,
+                              diagram_alt=req.diagram_alt)
     except ValueError as e:
         log.exception("Failed to parse grading response")
         raise HTTPException(502, f"Failed to grade answer: {e}")
@@ -465,13 +468,15 @@ class ExplainRequest(BaseModel):
     question: str
     expected_answer: str
     user_attempts: list[str]
+    diagram_alt: Optional[str] = None
 
 
 @app.post("/explain")
 def explain(req: ExplainRequest, x_api_key: Optional[str] = Header(None)):
     api_key = _api_key(x_api_key)
     try:
-        explanation = explain_concept(req.question, req.expected_answer, req.user_attempts, api_key=api_key)
+        explanation = explain_concept(req.question, req.expected_answer, req.user_attempts, api_key=api_key,
+                                      diagram_alt=req.diagram_alt)
     except Exception as e:
         log.exception("Claude API error during explanation")
         raise HTTPException(502, f"AI service error: {e}")

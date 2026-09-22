@@ -52,7 +52,7 @@ Session results are persisted in SQLite (`./data/voicequiz.db`) via `database.py
 ## Data Model
 
 Question object (backend returns, frontend augments during quiz):
-- Backend fields: `id`, `question`, `expected_answer`, `topic`, `difficulty`
+- Backend fields: `id`, `question`, `expected_answer`, `topic`, `difficulty`, and optionally `diagram` (inline SVG circuit schematic) + `diagram_alt` (spoken description of it)
 - Frontend adds: `status` (pending/graded/skipped), `user_answer`, `judgment`, `score`, `explanation`, `retries`, `bestScore`, `attempts[]`, `db_id` (from server)
 
 Score model: 1.0 (correct), 0.5 (partially correct), 0.0 (incorrect/skipped). Displayed as points.
@@ -65,4 +65,5 @@ Score model: 1.0 (correct), 0.5 (partially correct), 0.0 (incorrect/skipped). Di
 - v1.1 retry loop: incorrect/skipped questions re-enter the queue (interleaved, max 2 retries, best score kept)
 - v1.2 concept explainer: after exhausting retries, "Help me understand" calls `/explain` for a teaching breakdown with code examples
 - v2.0 persistence: SQLite stores sessions, questions, and attempts; history view lets user review past quizzes
+- Circuit diagrams: Claude may attach an inline SVG `diagram` to a circuit question. All model-generated SVG passes through `svg_sanitize.py` (whitelist of tags/attributes, local refs only) before it reaches the browser — a diagram that fails to sanitize, or arrives without `diagram_alt`, is dropped and the question is used as-is. Diagrams use `currentColor` so they work in both themes; `diagram_alt` is spoken by TTS and sent to the grader/explainer as context. The PDF export prints the description, not the SVG (fpdf2 drops `<text>` from SVG, which would strip component labels)
 - See `requirements.md` for full v1 spec and `roadmap.md` for version planning

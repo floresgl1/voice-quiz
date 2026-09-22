@@ -195,6 +195,25 @@
       margin-bottom: 1rem;
     }
 
+    .diagram {
+      margin: 0 0 1rem;
+      padding: 1rem;
+      background: var(--code-bg);
+      border-radius: 8px;
+      text-align: center;
+      color: var(--text);
+    }
+
+    .diagram svg {
+      width: 100%;
+      max-width: 420px;
+      height: auto;
+      color: var(--text);
+    }
+
+    .diagram.diagram-sm svg { max-width: 260px; }
+    .diagram.diagram-sm { padding: 0.6rem; margin-bottom: 0.6rem; }
+
     code {
       background: var(--code-bg);
       padding: 0.15rem 0.35rem;
@@ -854,6 +873,7 @@
 
       <div class="card">
         <p class="label">Question</p>
+        <div class="diagram hidden" id="question-diagram"></div>
         <p class="question-text" id="question-text"></p>
 
         <div id="answer-section">
@@ -1182,6 +1202,7 @@ function renderReviewList() {
         <div class="review-header">
           <span class="review-num">${i + 1}</span>
           <div class="review-body">
+            ${diagramHtml(q, "diagram-sm")}
             <p class="review-q-text">${renderRichText(q.question)}</p>
             <div class="review-meta">${srcTag}${topicTag}${diffTag}</div>
           </div>
@@ -1349,6 +1370,7 @@ function showQuestion() {
   const retryLabel = q.retries > 0 ? ` (Retry ${q.retries}/2)` : "";
   $("question-text").innerHTML = renderRichText(q.question);
   applyRichFormatting($("question-text"));
+  showDiagram($("question-diagram"), q);
   $("progress").textContent = `Question ${queuePos + 1} / ${queue.length}${retryLabel}`;
   $("source-label").textContent = multiFile && q.source_file ? `From: ${q.source_file}` : "";
   updateScore();
@@ -1387,7 +1409,7 @@ function showQuestion() {
     $("mc-section").classList.add("hidden");
   }
 
-  speak(q.question);
+  speak(questionSpeech(q));
 }
 
 function renderMcChoices(q) {
@@ -1433,6 +1455,7 @@ function saveQuizState() {
       judgment: q.judgment, score: q.score, explanation: q.explanation,
       retries: q.retries, bestScore: q.bestScore, attempts: q.attempts,
       flagged: q.flagged, choices: q.choices,
+      diagram: q.diagram, diagram_alt: q.diagram_alt,
     })),
     queue, queuePos, totalPoints, quizMode, multiFile,
   };
@@ -1694,6 +1717,7 @@ async function submitAnswer(userAnswer) {
         question: q.question,
         expected_answer: q.expected_answer,
         user_answer: userAnswer,
+        diagram_alt: q.diagram_alt || null,
         session_id: sessionId,
         question_db_id: q.db_id,
         attempt_num: q.attempts.length,
@@ -1791,6 +1815,28 @@ function showFeedback(fb) {
 }
 
 // --- Rich Text Rendering ---
+// Diagrams arrive as inline SVG already sanitized server-side (svg_sanitize.py).
+function showDiagram(el, q) {
+  if (!el) return;
+  if (q.diagram) {
+    el.innerHTML = q.diagram;
+    el.classList.remove("hidden");
+  } else {
+    el.innerHTML = "";
+    el.classList.add("hidden");
+  }
+}
+
+function diagramHtml(q, extraClass = "") {
+  if (!q.diagram) return "";
+  return `<div class="diagram ${extraClass}">${q.diagram}</div>`;
+}
+
+// The question is read aloud, so describe the circuit instead of skipping it.
+function questionSpeech(q) {
+  return q.diagram_alt ? `${q.question}. The circuit shown: ${q.diagram_alt}` : q.question;
+}
+
 function renderRichText(text) {
   let html = text
     .replace(/&/g, "&amp;")
@@ -1847,6 +1893,7 @@ async function handleExplain(e) {
         question: q.question,
         expected_answer: q.expected_answer,
         user_attempts: q.attempts,
+        diagram_alt: q.diagram_alt || null,
       }),
     });
 
@@ -2046,6 +2093,7 @@ window.addEventListener("beforeunload", () => {
         judgment: q.judgment, score: q.score, explanation: q.explanation,
         retries: q.retries, bestScore: q.bestScore, attempts: q.attempts,
         flagged: q.flagged, choices: q.choices,
+        diagram: q.diagram, diagram_alt: q.diagram_alt,
       })),
       queue, queuePos, totalPoints, quizMode, multiFile,
     };
@@ -2139,6 +2187,7 @@ function showSummary() {
         <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
         <div class="summary-detail">
           <p class="q-text">${num}. ${q.question}${flagLabel}<span style="color: var(--text-faint); font-weight: 400;">${retryInfo}</span></p>
+          ${diagramHtml(q, "diagram-sm")}
           <p class="q-explanation">${q.explanation}</p>
         </div>
       </div>
@@ -2271,6 +2320,7 @@ async function showSessionDetail(sid) {
           <div class="summary-badge ${badgeClass}">${badgeLabel}</div>
           <div class="summary-detail">
             <p class="q-text">${i + 1}. ${q.question}<span style="color: var(--text-faint); font-weight: 400;">${retryInfo}</span></p>
+            ${diagramHtml(q, "diagram-sm")}
             <p class="q-explanation">${explanation}</p>
           </div>
         </div>

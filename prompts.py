@@ -7,6 +7,8 @@ Return ONLY a JSON array of question objects. Each object must have:
 - "expected_answer": a concise but complete reference answer
 - "topic": a short category label for the question
 - "difficulty": one of "easy", "medium", or "hard"
+- "diagram": (OPTIONAL) inline SVG markup for a circuit diagram, when the question is about a circuit
+- "diagram_alt": (REQUIRED if "diagram" is present) a one-sentence spoken description of the circuit, since the question is read aloud
 
 Rules:
 - Prioritize conceptual questions that test understanding, reasoning, and application — ask "why," "how," "explain," "compare," "what would happen if"
@@ -18,15 +20,28 @@ Rules:
 - When the source contains math, formulas, or equations, use LaTeX notation in questions and answers: inline math with $...$ and display math with $$...$$
 - When the source contains code, use triple-backtick code blocks with the language name (e.g. ```python) in questions and answers
 
+Circuit diagrams:
+- Include a "diagram" ONLY when the question is genuinely about a circuit and the student needs to see it to answer — e.g. "in the circuit shown, what happens to Vout if R2 doubles?". Never add a diagram as decoration, and never for non-circuit material.
+- Omit the "diagram" and "diagram_alt" keys entirely for every other question.
+- The question text must refer to the diagram (e.g. "in the circuit shown") rather than restating the whole topology.
+- Draw with plain SVG primitives only: <svg>, <g>, <line>, <polyline>, <polygon>, <path>, <rect>, <circle>, <ellipse>, <text>. No <style>, <script>, <foreignObject>, CSS classes, or external references — they are stripped.
+- The root <svg> MUST have a viewBox (e.g. viewBox="0 0 320 200") and MUST NOT have width or height; the page sizes it.
+- Use stroke="currentColor" and fill="none" for wires and component bodies, and fill="currentColor" for <text> and for solid junction dots, so the diagram works in both light and dark themes. Never use hard-coded colors like black or #000.
+- Use stroke-width="2", font-size="13", and keep labels (R1, 10k, Vin, Vout, GND) clear of the wires.
+- Draw standard symbols: resistor as a zigzag <polyline>, capacitor as two parallel plates, battery/DC source as alternating long and short plates, ground as three shrinking horizontal bars, wires as straight horizontal or vertical <line> segments meeting at right angles, junctions as small filled circles (r="3").
+- Keep it small and readable — under about 10 components.
+
 Source material:
 {source_text}"""
 
 
-def build_grading_prompt(question: str, expected_answer: str, user_answer: str) -> str:
+def build_grading_prompt(question: str, expected_answer: str, user_answer: str,
+                         diagram_alt: str | None = None) -> str:
+    circuit = f"\nCircuit shown with the question: {diagram_alt}\n" if diagram_alt else ""
     return f"""You are grading a spoken quiz answer. Compare the student's answer to the expected answer.
 
 Question: {question}
-
+{circuit}
 Expected answer: {expected_answer}
 
 Student's answer: {user_answer}
@@ -46,7 +61,12 @@ Grading guidelines:
 
 
 def build_choices_prompt(questions: list[dict]) -> str:
-    q_list = "\n".join(f'{i+1}. Q: {q["question"]}\n   A: {q["expected_answer"]}' for i, q in enumerate(questions))
+    q_list = "\n".join(
+        f'{i+1}. Q: {q["question"]}\n'
+        + (f'   Circuit shown: {q["diagram_alt"]}\n' if q.get("diagram_alt") else "")
+        + f'   A: {q["expected_answer"]}'
+        for i, q in enumerate(questions)
+    )
     return f"""For each question below, generate 4 multiple-choice options: one correct answer and three plausible distractors.
 
 Return ONLY a JSON array where each element is an array of 4 strings (the choices). The correct answer should be randomly placed among the 4 options (not always first). Distractors should be wrong but realistic.
@@ -76,12 +96,14 @@ Write 3-5 bullet points summarizing the key concepts the student needs to review
 Return ONLY the bullet points as plain text, one per line, starting with "- ". Keep it concise and useful — this goes on a printed study sheet. Do NOT use LaTeX or code blocks."""
 
 
-def build_explain_prompt(question: str, expected_answer: str, user_attempts: list[str]) -> str:
+def build_explain_prompt(question: str, expected_answer: str, user_attempts: list[str],
+                         diagram_alt: str | None = None) -> str:
     attempts_text = "\n".join(f"- Attempt {i+1}: {a}" for i, a in enumerate(user_attempts))
+    circuit = f"\nCircuit shown with the question: {diagram_alt}\n" if diagram_alt else ""
     return f"""You are a patient tutor helping a student understand a concept they struggled with on a quiz. They attempted this question multiple times and still didn't get it right.
 
 Question: {question}
-
+{circuit}
 Expected answer: {expected_answer}
 
 Student's attempts:
