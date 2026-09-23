@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from extraction import extract_text
-from claude_client import generate_questions, grade_answer, explain_concept, generate_choices, generate_review_summary
+from claude_client import generate_questions, grade_answer, explain_concept, generate_choices, generate_review_summary, generate_lesson
 from youtube import get_transcript
 from github import get_repo_content
 from database import init_db, create_session, save_attempt, update_session_score, complete_session, get_sessions, get_session_detail, get_source_text, get_quiz_state, save_quiz_state, create_flag, update_session_max_points, get_flags, update_question, delete_question
@@ -481,6 +481,35 @@ def explain(req: ExplainRequest, x_api_key: Optional[str] = Header(None)):
         log.exception("Claude API error during explanation")
         raise HTTPException(502, f"AI service error: {e}")
     return {"explanation": explanation}
+
+
+class FailedCheck(BaseModel):
+    check_question: str
+    user_answer: str
+
+
+class LearnRequest(BaseModel):
+    question: str
+    expected_answer: str
+    user_attempts: list[str]
+    diagram_alt: Optional[str] = None
+    failed_checks: list[FailedCheck] = []
+
+
+@app.post("/learn")
+def learn(req: LearnRequest, x_api_key: Optional[str] = Header(None)):
+    api_key = _api_key(x_api_key)
+    try:
+        result = generate_lesson(req.question, req.expected_answer, req.user_attempts, api_key=api_key,
+                                 diagram_alt=req.diagram_alt,
+                                 failed_checks=[c.model_dump() for c in req.failed_checks])
+    except ValueError as e:
+        log.exception("Failed to parse lesson response")
+        raise HTTPException(502, f"Failed to generate lesson: {e}")
+    except Exception as e:
+        log.exception("Claude API error during lesson generation")
+        raise HTTPException(502, f"AI service error: {e}")
+    return result
 
 
 def _get_extension(filename: str | None) -> str:

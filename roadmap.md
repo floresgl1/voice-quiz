@@ -148,5 +148,6 @@
 ## v9 — Long-Term Learning
 **Goal:** Build a study system that tracks knowledge over time.
 
+- [x] Post-quiz learn phase — lesson + fresh check question for each missed question, re-taught from a new angle on failure (max 2 retries)
 - [ ] Spaced repetition (resurface questions you got wrong days later)
 - [ ] Analytics dashboard — scores over time, weak topics, improvement trends

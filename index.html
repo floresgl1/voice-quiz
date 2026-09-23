@@ -924,9 +924,70 @@
         <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="final-score"></p>
         <div id="summary-list"></div>
       </div>
+      <button class="btn-primary hidden" id="btn-learn" style="width: 100%; margin-top: 0.5rem;">Learn What I Missed</button>
       <button class="btn-secondary" id="btn-export-pdf" style="width: 100%; margin-top: 0.5rem;">Export Study Sheet (PDF)</button>
       <button class="btn-secondary" id="btn-requiz" style="width: 100%; margin-top: 0.5rem;">Re-quiz Same Material</button>
       <button class="btn-primary" id="btn-restart" style="width: 100%; margin-top: 0.5rem;">Start New Quiz</button>
+    </div>
+
+    <!-- Learn Screen -->
+    <div id="screen-learn" class="hidden">
+      <div class="score-bar">
+        <span id="learn-progress"></span>
+        <span id="learn-topic" style="font-size: 0.8rem; color: var(--text-muted);"></span>
+      </div>
+
+      <div class="card">
+        <div id="learn-loading" class="loading hidden">
+          <div class="spinner"></div>
+          <p id="learn-loading-text">Preparing a lesson...</p>
+        </div>
+
+        <div id="learn-content" class="hidden">
+          <p class="label">You missed</p>
+          <div class="diagram hidden" id="learn-diagram"></div>
+          <p id="learn-original" style="margin-bottom: 0.75rem;"></p>
+
+          <div class="explain-section" style="margin-top: 0;">
+            <p class="explain-title" id="learn-lesson-title">Lesson</p>
+            <div class="explain-body" id="learn-lesson"></div>
+          </div>
+
+          <p class="label" style="margin-top: 1rem;">Check your understanding</p>
+          <p class="question-text" id="learn-check"></p>
+
+          <div id="learn-answer">
+            <div class="transcript" id="learn-transcript">Press record to answer...</div>
+            <div class="btn-row">
+              <button class="btn-record" id="btn-learn-record">Record <span class="key-badge">R</span></button>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+              <input type="text" id="learn-typed" placeholder="Or type your answer..." style="flex: 1; padding: 0.5rem 0.75rem; border: 1px solid var(--border-input); border-radius: 8px; font-size: 0.95rem; background: var(--card-bg); color: var(--text);">
+              <button class="btn-primary" id="btn-learn-submit" disabled>Submit</button>
+            </div>
+          </div>
+
+          <div id="learn-grading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Grading your answer...</p>
+          </div>
+
+          <div id="learn-feedback" class="hidden"></div>
+
+          <div id="learn-actions" class="btn-row hidden">
+            <button class="btn-primary" id="btn-learn-retry">Explain It Differently</button>
+            <button class="btn-primary" id="btn-learn-next">Next</button>
+            <button class="btn-secondary" id="btn-learn-exit">Back to Summary</button>
+          </div>
+        </div>
+
+        <div id="learn-done" class="hidden">
+          <p class="label">Learning Complete</p>
+          <p style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;" id="learn-done-score"></p>
+          <div id="learn-done-list"></div>
+          <button class="btn-secondary" id="btn-learn-done" style="width: 100%; margin-top: 1rem;">Back to Summary</button>
+        </div>
+      </div>
     </div>
 
     <!-- History Screen -->
@@ -1000,6 +1061,7 @@ const screens = {
   review:  $("screen-review"),
   quiz:    $("screen-quiz"),
   summary: $("screen-summary"),
+  learn:   $("screen-learn"),
   history: $("screen-history"),
   "session-detail": $("screen-session-detail"),
 };
@@ -1608,8 +1670,13 @@ function speak(text) {
 let mediaRecorder = null;
 let audioChunks = [];
 
+// Which screen the recorder is feeding: element ids to update and the function that receives the transcript.
+const quizRecTarget = { transcript: "transcript", btn: "btn-record", skip: "btn-skip", onText: (t) => submitAnswer(t) };
+let recTarget = quizRecTarget;
+
 async function startRecording() {
   window.speechSynthesis.cancel();
+  const target = recTarget;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream);
@@ -1628,8 +1695,8 @@ async function startRecording() {
       const blob = new Blob(audioChunks, { type: mimeType });
       audioChunks = [];
 
-      $("transcript").textContent = "Transcribing...";
-      $("btn-record").disabled = true;
+      $(target.transcript).textContent = "Transcribing...";
+      $(target.btn).disabled = true;
 
       try {
         const form = new FormData();
@@ -1641,24 +1708,24 @@ async function startRecording() {
         }
         const { text } = await res.json();
         if (text.trim()) {
-          $("transcript").textContent = text;
-          submitAnswer(text.trim());
+          $(target.transcript).textContent = text;
+          target.onText(text.trim());
         } else {
-          $("transcript").textContent = "No speech detected. Try again or type your answer.";
-          $("btn-record").disabled = false;
+          $(target.transcript).textContent = "No speech detected. Try again or type your answer.";
+          $(target.btn).disabled = false;
         }
       } catch (err) {
         showError(err.message);
-        $("transcript").textContent = "Transcription failed. Type your answer below.";
-        $("btn-record").disabled = false;
+        $(target.transcript).textContent = "Transcription failed. Type your answer below.";
+        $(target.btn).disabled = false;
       }
     };
 
     isRecording = true;
-    $("transcript").textContent = "Listening...";
-    $("btn-record").innerHTML = 'Stop <span class="key-badge">R</span>';
-    $("btn-record").classList.add("recording");
-    $("btn-skip").disabled = true;
+    $(target.transcript).textContent = "Listening...";
+    $(target.btn).innerHTML = 'Stop <span class="key-badge">R</span>';
+    $(target.btn).classList.add("recording");
+    if (target.skip) $(target.skip).disabled = true;
     mediaRecorder.start();
   } catch (err) {
     showError("Microphone access denied or unavailable.");
@@ -1666,10 +1733,11 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  const target = recTarget;
   isRecording = false;
-  $("btn-record").innerHTML = 'Record <span class="key-badge">R</span>';
-  $("btn-record").classList.remove("recording");
-  $("btn-skip").disabled = false;
+  $(target.btn).innerHTML = 'Record <span class="key-badge">R</span>';
+  $(target.btn).classList.remove("recording");
+  if (target.skip) $(target.skip).disabled = false;
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
   }
@@ -1677,6 +1745,7 @@ function stopRecording() {
 }
 
 $("btn-record").addEventListener("click", () => {
+  recTarget = quizRecTarget;
   if (isRecording) {
     stopRecording();
   } else {
@@ -2109,9 +2178,16 @@ const _origShowScreen = showScreen;
 showScreen = function(name) { currentScreen = name; _origShowScreen(name); };
 
 document.addEventListener("keydown", (e) => {
-  if (currentScreen !== "quiz") return;
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (currentScreen === "learn") {
+    if (e.key.toLowerCase() === "r" && !$("learn-answer").classList.contains("hidden") && !$("btn-learn-record").disabled) {
+      e.preventDefault();
+      $("btn-learn-record").click();
+    }
+    return;
+  }
+  if (currentScreen !== "quiz") return;
 
   const key = e.key.toLowerCase();
   const answerVisible = !$("answer-section").classList.contains("hidden");
@@ -2211,7 +2287,225 @@ function showSummary() {
     list.innerHTML = displayQuestions.map((q, i) => renderQuestionItem(q, i + 1)).join("");
   }
   applyRichFormatting(list);
+
+  const missedCount = missedQuestions().length;
+  $("btn-learn").classList.toggle("hidden", missedCount === 0);
+  $("btn-learn").textContent = `Learn What I Missed (${missedCount})`;
 }
+
+// --- Learn (post-quiz lesson + check loop) ---
+// For each missed question: /learn gives a lesson and a fresh check question,
+// the check is graded by /grade (no db ids, so it stays out of quiz history),
+// and a failed check asks for a new lesson from a different angle, up to 2 retries.
+const LEARN_MAX_RETRIES = 2;
+let learnItems = [];
+let learnPos = 0;
+let learnToken = 0;  // bumped on every lesson request so a late response for an old item is ignored
+
+const learnRecTarget = { transcript: "learn-transcript", btn: "btn-learn-record", skip: null, onText: (t) => submitCheck(t) };
+
+function missedQuestions() {
+  return questions.filter(q => !q.flagged && q.status !== "pending" && q.bestScore < 1);
+}
+
+function startLearn() {
+  learnItems = missedQuestions().map(q => ({
+    q, retries: 0, failedChecks: [], lesson: null, learned: false,
+  }));
+  learnPos = 0;
+  if (!learnItems.length) return;
+  showScreen("learn");
+  $("learn-done").classList.add("hidden");
+  loadLesson();
+}
+
+function leaveLearn() {
+  learnToken++;
+  window.speechSynthesis.cancel();
+  if (isRecording) stopRecording();
+  showScreen("summary");
+}
+
+async function loadLesson() {
+  const item = learnItems[learnPos];
+  const token = ++learnToken;
+  $("learn-progress").textContent = `Learning ${learnPos + 1} / ${learnItems.length}` +
+    (item.retries > 0 ? ` (Try ${item.retries + 1})` : "");
+  $("learn-topic").textContent = item.q.topic || "";
+  $("learn-loading-text").textContent = item.retries > 0 ? "Trying a different explanation..." : "Preparing a lesson...";
+  $("learn-content").classList.add("hidden");
+  $("learn-loading").classList.remove("hidden");
+
+  try {
+    const res = await fetch(`${API}/learn`, {
+      method: "POST",
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        question: item.q.question,
+        expected_answer: item.q.expected_answer,
+        user_attempts: item.q.attempts || [],
+        diagram_alt: item.q.diagram_alt || null,
+        failed_checks: item.failedChecks,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Lesson failed");
+    }
+    const data = await res.json();
+    if (token !== learnToken) return;
+    item.lesson = data;
+    renderLesson(item);
+  } catch (err) {
+    if (token !== learnToken) return;
+    showError(err.message);
+    leaveLearn();
+  }
+}
+
+function renderLesson(item) {
+  $("learn-loading").classList.add("hidden");
+  $("learn-content").classList.remove("hidden");
+
+  showDiagram($("learn-diagram"), item.q);
+  $("learn-original").innerHTML = renderRichText(item.q.question);
+  $("learn-lesson-title").textContent = item.retries > 0 ? "Another Way to Think About It" : "Lesson";
+  $("learn-lesson").innerHTML = renderRichText(item.lesson.lesson);
+  $("learn-check").innerHTML = renderRichText(item.lesson.check_question);
+  applyRichFormatting($("learn-content"));
+
+  $("learn-answer").classList.remove("hidden");
+  $("learn-grading").classList.add("hidden");
+  $("learn-feedback").classList.add("hidden");
+  $("learn-actions").classList.add("hidden");
+  $("learn-transcript").textContent = "Press record to answer...";
+  $("btn-learn-record").disabled = false;
+  $("learn-typed").value = "";
+  $("btn-learn-submit").disabled = true;
+
+  speak(item.lesson.check_question);
+}
+
+async function submitCheck(userAnswer) {
+  const item = learnItems[learnPos];
+  const token = learnToken;
+  $("learn-answer").classList.add("hidden");
+  $("learn-grading").classList.remove("hidden");
+
+  try {
+    const res = await fetch(`${API}/grade`, {
+      method: "POST",
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        question: item.lesson.check_question,
+        expected_answer: item.lesson.check_expected_answer,
+        user_answer: userAnswer,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Grading failed");
+    }
+    const result = await res.json();
+    if (token !== learnToken) return;
+    showCheckFeedback(item, userAnswer, result);
+  } catch (err) {
+    if (token !== learnToken) return;
+    showError(err.message);
+    $("learn-grading").classList.add("hidden");
+    $("learn-answer").classList.remove("hidden");
+    $("btn-learn-record").disabled = false;
+  }
+}
+
+function showCheckFeedback(item, userAnswer, result) {
+  const passed = result.judgment === "correct";
+  let note;
+  if (passed) {
+    item.learned = true;
+    note = "You've got it.";
+  } else {
+    item.failedChecks.push({ check_question: item.lesson.check_question, user_answer: userAnswer });
+    note = item.retries < LEARN_MAX_RETRIES
+      ? "Not quite yet. Get a different explanation, or move on."
+      : "Still shaky. This one is worth reviewing again later.";
+  }
+  const judgmentLabels = { correct: "Correct", partially_correct: "Partially Correct", incorrect: "Incorrect" };
+
+  $("learn-grading").classList.add("hidden");
+  $("learn-feedback").innerHTML = `
+    <div class="feedback ${result.judgment}">
+      <p class="judgment-label">${judgmentLabels[result.judgment] || result.judgment}</p>
+      <p class="explanation">${renderRichText(result.explanation || "")}</p>
+      <p class="expected"><strong>Expected answer:</strong> ${renderRichText(item.lesson.check_expected_answer)}</p>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">${note}</p>
+    </div>
+  `;
+  applyRichFormatting($("learn-feedback"));
+  $("learn-feedback").classList.remove("hidden");
+
+  $("btn-learn-retry").classList.toggle("hidden", passed || item.retries >= LEARN_MAX_RETRIES);
+  $("btn-learn-next").textContent = learnPos >= learnItems.length - 1 ? "Finish" : "Next";
+  $("learn-actions").classList.remove("hidden");
+}
+
+function showLearnDone() {
+  window.speechSynthesis.cancel();
+  $("learn-content").classList.add("hidden");
+  $("learn-loading").classList.add("hidden");
+  $("learn-progress").textContent = "";
+  $("learn-topic").textContent = "";
+
+  const learned = learnItems.filter(i => i.learned).length;
+  $("learn-done-score").textContent = `${learned} / ${learnItems.length} concepts learned`;
+  $("learn-done-list").innerHTML = learnItems.map(i => `
+    <div class="summary-item">
+      <div class="summary-badge ${i.learned ? "correct" : "incorrect"}">${i.learned ? "✓" : "!"}</div>
+      <div class="summary-detail">
+        <p class="q-text">${renderRichText(i.q.question)}</p>
+        <p class="q-explanation">${i.learned ? "Passed the check" : "Still shaky — review this one"}</p>
+      </div>
+    </div>
+  `).join("");
+  applyRichFormatting($("learn-done-list"));
+  $("learn-done").classList.remove("hidden");
+}
+
+$("btn-learn").addEventListener("click", startLearn);
+
+$("btn-learn-record").addEventListener("click", () => {
+  recTarget = learnRecTarget;
+  if (isRecording) stopRecording(); else startRecording();
+});
+
+$("learn-typed").addEventListener("input", () => {
+  $("btn-learn-submit").disabled = !$("learn-typed").value.trim();
+});
+$("learn-typed").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && $("learn-typed").value.trim()) submitCheck($("learn-typed").value.trim());
+});
+$("btn-learn-submit").addEventListener("click", () => {
+  const text = $("learn-typed").value.trim();
+  if (text) submitCheck(text);
+});
+
+$("btn-learn-retry").addEventListener("click", () => {
+  learnItems[learnPos].retries++;
+  loadLesson();
+});
+
+$("btn-learn-next").addEventListener("click", () => {
+  if (learnPos >= learnItems.length - 1) {
+    learnToken++;
+    showLearnDone();
+  } else {
+    learnPos++;
+    loadLesson();
+  }
+});
+
+$("btn-learn-exit").addEventListener("click", leaveLearn);
+$("btn-learn-done").addEventListener("click", leaveLearn);
 
 $("btn-restart").addEventListener("click", () => {
   questions = [];
