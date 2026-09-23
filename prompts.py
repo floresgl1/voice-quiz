@@ -117,3 +117,34 @@ Write a clear, teaching-style explanation that helps the student understand this
 4. End with a one-sentence suggestion of what to review or practice
 
 Keep the tone encouraging. The goal is to help them learn, not to grade them again."""
+
+
+def build_learn_prompt(question: str, expected_answer: str, user_attempts: list[str],
+                       diagram_alt: str | None = None, failed_checks: list[dict] | None = None) -> str:
+    attempts_text = "\n".join(f"- Attempt {i+1}: {a}" for i, a in enumerate(user_attempts)) or "- (skipped)"
+    circuit = f"\nCircuit shown with the question: {diagram_alt}\n" if diagram_alt else ""
+    retry = ""
+    if failed_checks:
+        checks_text = "\n".join(
+            f'- Check question: {c["check_question"]}\n  Student answered: {c["user_answer"]}'
+            for c in failed_checks
+        )
+        retry = f"""
+You already taught this concept and the student failed these check questions afterward:
+{checks_text}
+
+Your previous explanation did not land. Teach it from a DIFFERENT angle this time — a new analogy, a worked example, or breaking it into smaller steps. Do not repeat the same explanation.
+"""
+    return f"""You are a patient tutor. A student just finished a quiz and missed this question. Teach them the concept, then check whether they understood it.
+
+Quiz question: {question}
+{circuit}
+Expected answer: {expected_answer}
+
+Student's attempts:
+{attempts_text}
+{retry}
+Return ONLY a JSON object with:
+- "lesson": a short teaching explanation (under 200 words). Explain the core concept, why the expected answer is correct, and what the student's attempts were missing. Include a short code example in triple backticks if the topic is programming-related. Use LaTeX ($...$) for math.
+- "check_question": ONE new question that tests the SAME concept. It must NOT be a rewording of the quiz question, and its answer must NOT appear verbatim in the lesson — the student should have to apply the concept, not recall a sentence they just read. It will be read aloud and answered by voice, so keep it short and answerable in one or two spoken sentences.
+- "check_expected_answer": the answer to check_question, used for grading"""

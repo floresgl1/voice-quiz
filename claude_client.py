@@ -5,7 +5,7 @@ import re
 import anthropic
 
 from svg_sanitize import sanitize_svg
-from prompts import build_generation_prompt, build_grading_prompt, build_explain_prompt, build_choices_prompt, build_review_summary_prompt
+from prompts import build_generation_prompt, build_grading_prompt, build_explain_prompt, build_choices_prompt, build_review_summary_prompt, build_learn_prompt
 
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 
@@ -106,6 +106,25 @@ def explain_concept(question: str, expected_answer: str, user_attempts: list[str
     )
 
     return _extract_text(response)
+
+
+def generate_lesson(question: str, expected_answer: str, user_attempts: list[str], api_key: str | None = None,
+                    diagram_alt: str | None = None, failed_checks: list[dict] | None = None) -> dict:
+    prompt = build_learn_prompt(question, expected_answer, user_attempts, diagram_alt, failed_checks)
+
+    response = _get_client(api_key).messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = _extract_text(response)
+    result = _parse_json(text)
+    if not isinstance(result, dict) or not all(
+        result.get(k) for k in ("lesson", "check_question", "check_expected_answer")
+    ):
+        raise ValueError("Expected a JSON object with lesson, check_question, check_expected_answer")
+    return result
 
 
 def _extract_text(response) -> str:
