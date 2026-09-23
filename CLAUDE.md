@@ -37,11 +37,12 @@ Session results are persisted in SQLite (`./data/voicequiz.db`) via `database.py
 4. `POST /update-score` — updates session total_points in the DB
 5. `POST /complete-session` — marks session as completed in the DB
 6. `POST /explain` — accepts question + expected answer + user attempts, sends to Claude for a teaching-style concept breakdown (plain text, not JSON)
-7. `GET /sessions` — list past quiz sessions (date, source file, score)
-8. `GET /sessions/{id}` — full session detail with per-question results and attempts
-9. `GET /` — serves `index.html`
+7. `POST /learn` — accepts a missed question + user attempts (+ optional `failed_checks`), returns JSON `{lesson, check_question, check_expected_answer}`. The check is graded by `/grade` without db ids, so it is not persisted
+8. `GET /sessions` — list past quiz sessions (date, source file, score)
+9. `GET /sessions/{id}` — full session detail with per-question results and attempts
+10. `GET /` — serves `index.html`
 
-**Frontend state machine:** upload → loading → quiz → summary. TTS uses browser `SpeechSynthesis`, STT uses browser `SpeechRecognition` (Chrome only).
+**Frontend state machine:** upload → loading → quiz → summary → (optional) learn → summary. TTS uses browser `SpeechSynthesis`, STT uses browser `SpeechRecognition` (Chrome only).
 
 **Persistence** is handled by `database.py` — plain `sqlite3`, no ORM. Tables: `sessions`, `questions`, `attempts`. DB auto-created on startup via `init_db()`.
 
@@ -64,6 +65,7 @@ Score model: 1.0 (correct), 0.5 (partially correct), 0.0 (incorrect/skipped). Di
 - `expected_answer` is sent to the frontend in the question object (visible in DevTools — acceptable for a personal study tool)
 - v1.1 retry loop: incorrect/skipped questions re-enter the queue (interleaved, max 2 retries, best score kept)
 - v1.2 concept explainer: after exhausting retries, "Help me understand" calls `/explain` for a teaching breakdown with code examples
+- Learn phase: from the summary, "Learn What I Missed" walks each question scored below 1 through lesson → spoken check question → grade. A failed check re-calls `/learn` with `failed_checks` so Claude teaches from a different angle (max 2 retries). The recorder is shared between screens via `recTarget`
 - v2.0 persistence: SQLite stores sessions, questions, and attempts; history view lets user review past quizzes
 - Circuit diagrams: Claude may attach an inline SVG `diagram` to a circuit question. All model-generated SVG passes through `svg_sanitize.py` (whitelist of tags/attributes, local refs only) before it reaches the browser — a diagram that fails to sanitize, or arrives without `diagram_alt`, is dropped and the question is used as-is. Diagrams use `currentColor` so they work in both themes; `diagram_alt` is spoken by TTS and sent to the grader/explainer as context. The PDF export prints the description, not the SVG (fpdf2 drops `<text>` from SVG, which would strip component labels)
 - See `requirements.md` for full v1 spec and `roadmap.md` for version planning
