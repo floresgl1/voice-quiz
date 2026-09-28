@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import re
@@ -9,6 +10,8 @@ from svg_sanitize import sanitize_svg
 from prompts import build_generation_prompt, build_grading_prompt, build_explain_prompt, build_choices_prompt, build_review_summary_prompt, build_learn_prompt
 
 MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
+
+log = logging.getLogger(__name__)
 
 _default_client = None
 
@@ -37,18 +40,57 @@ def generate_questions(source_text: str, num_questions: int = 10, api_key: str |
     if not isinstance(questions, list):
         raise ValueError("Expected a JSON array of questions")
 
+    kept = []
     for q in questions:
         if not isinstance(q, dict):
             continue
-        diagram = sanitize_svg(q.get("diagram"))
-        if diagram and q.get("diagram_alt"):
-            q["diagram"] = diagram
-        else:
-            # An unusable or unlabelled diagram is dropped; the question still works.
-            q.pop("diagram", None)
-            q.pop("diagram_alt", None)
+        if _settle_diagram(q):
+            kept.append(q)
+    return kept
 
-    return questions
+
+# Phrases that only make sense with a picture next to the question.
+_REFERS_TO_DIAGRAM = re.compile(
+    r"\b(shown|pictured|depicted)\b|\b(diagram|schematic|figure|circuit) (above|below)\b",
+    re.IGNORECASE,
+)
+
+
+def _settle_diagram(q: dict) -> bool:
+    """Sanitize a question's diagram and decide what to do if it can't be used.
+
+    Returns False when the question should be dropped. The outcomes:
+    - usable SVG with a description: keep both
+    - SVG rejected but described: drop the SVG, keep the description, which the
+      frontend shows as text and TTS/grading/PDF already use
+    - SVG present without a description: drop the SVG
+    - then, if the question still refers to a picture ("the circuit shown") and
+      there is no description to stand in for it, it can't be answered: drop it
+    """
+    raw = q.get("diagram")
+    alt = q.get("diagram_alt")
+    qid = q.get("id")
+
+    if raw:
+        diagram = sanitize_svg(raw)
+        if diagram and alt:
+            q["diagram"] = diagram
+            return True
+        q.pop("diagram", None)
+        if not diagram:
+            log.warning("Question %s: diagram rejected by sanitizer (%d chars); %s",
+                        qid, len(raw) if isinstance(raw, str) else 0,
+                        "keeping its description as text" if alt else "no description either")
+        else:
+            log.warning("Question %s: diagram dropped, it had no diagram_alt", qid)
+
+    if not q.get("diagram_alt"):
+        q.pop("diagram_alt", None)
+        if _REFERS_TO_DIAGRAM.search(q.get("question", "")):
+            log.warning("Question %s dropped: it refers to a diagram that isn't available: %r",
+                        qid, q.get("question", "")[:120])
+            return False
+    return True
 
 
 def grade_answer(question: str, expected_answer: str, user_answer: str, api_key: str | None = None,
