@@ -69,7 +69,7 @@ def build_choices_prompt(questions: list[dict]) -> str:
     )
     return f"""For each question below, generate 4 multiple-choice options: one correct answer and three plausible distractors.
 
-Return ONLY a JSON array where each element is an array of 4 strings (the choices). The correct answer should be randomly placed among the 4 options (not always first). Distractors should be wrong but realistic.
+Return ONLY a JSON array where each element is an array of 4 strings (the choices). Distractors should be wrong but realistic.
 
 Questions:
 {q_list}"""

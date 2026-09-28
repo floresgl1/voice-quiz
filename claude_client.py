@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import re
 
 import anthropic
@@ -80,6 +81,10 @@ def generate_choices(questions: list[dict], api_key: str | None = None) -> list[
     choices = _parse_json(text)
     if not isinstance(choices, list):
         raise ValueError("Expected a JSON array of choice arrays")
+    # The model reliably lists the correct answer first, so the order is set here, not by the prompt.
+    for options in choices:
+        if isinstance(options, list):
+            random.shuffle(options)
     return choices
 
 
