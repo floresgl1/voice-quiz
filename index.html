@@ -1890,15 +1890,23 @@ function showDiagram(el, q) {
   if (q.diagram) {
     el.innerHTML = q.diagram;
     el.classList.remove("hidden");
-    fitDiagramLabels(el);
+    fixDiagrams(el);
   } else {
     el.innerHTML = "";
     el.classList.add("hidden");
   }
 }
 
+// Model-drawn SVG gets three fixes after it renders, all in code because the
+// prompt rules alone aren't followed reliably:
+//   1. colors: hard-coded or default (black) fills/strokes become theme-safe
+//   2. labels: fit inside their boxes (below)
+//   3. viewBox: grown to include anything drawn outside it, so nothing is clipped
+// Every step is a no-op on an already-fixed diagram, since callers may run it
+// twice (e.g. showDiagram then applyRichFormatting on the same container).
+//
 // Claude places diagram labels without being able to measure them, so a long
-// label can spill out of its box. After render, fit any label that is wider
+// label can spill out of its box. Fit any label that is wider
 // than the smallest <rect> containing its center: shrink it slightly, or, if
 // that would make it too small to read, split it onto two lines first. Labels
 // outside every box are left alone. Needs the diagram visible: getBBox() is 0
@@ -1906,9 +1914,66 @@ function showDiagram(el, q) {
 const LABEL_PAD = 4;
 const LABEL_MIN_SCALE = 0.85;  // below this, splitting reads better than shrinking
 
-function fitDiagramLabels(root) {
-  root.querySelectorAll(".diagram svg").forEach(fitSvgLabels);
-  if (root.matches && root.matches(".diagram")) root.querySelectorAll(":scope > svg").forEach(fitSvgLabels);
+function fixDiagrams(root) {
+  const svgs = [...root.querySelectorAll(".diagram svg")];
+  if (root.matches && root.matches(".diagram")) svgs.push(...root.querySelectorAll(":scope > svg"));
+  svgs.forEach(svg => {
+    fixDiagramColors(svg);
+    fitSvgLabels(svg);
+    fitViewBox(svg);
+  });
+}
+
+// SVG's default fill is black, and Claude sometimes hard-codes colors, so a box
+// can come out solid black: fine in dark mode, but in light mode the labels are
+// also dark (currentColor) and vanish into it. Anything not already
+// currentColor/none/url(#...) is repainted: text and strokes to currentColor;
+// fills to "none" for open shapes and anything box-sized (outlined if it had no
+// stroke), and to currentColor for small closed shapes (junction dots, arrowheads).
+const SOLID_FILL_MAX_AREA = 300;
+
+function fixDiagramColors(svg) {
+  const ink = getComputedStyle(svg).color;
+  const themeSafe = v => v === ink || v === "none" || v.startsWith("url(");
+
+  svg.querySelectorAll("text").forEach(t => {
+    if (!themeSafe(getComputedStyle(t).fill)) t.setAttribute("fill", "currentColor");
+  });
+  svg.querySelectorAll("rect, circle, ellipse, polygon, polyline, path, line").forEach(el => {
+    const cs = getComputedStyle(el);
+    if (!themeSafe(cs.stroke)) el.setAttribute("stroke", "currentColor");
+    if (themeSafe(cs.fill)) return;
+    const tag = el.tagName.toLowerCase();
+    const open = tag === "line" || tag === "polyline" || (tag === "path" && !/z\s*$/i.test(el.getAttribute("d") || ""));
+    const b = el.getBBox();
+    if (open || b.width * b.height > SOLID_FILL_MAX_AREA) {
+      el.setAttribute("fill", "none");
+      // A solid box with no outline would vanish once unfilled, so give it one.
+      if (cs.stroke === "none") {
+        el.setAttribute("stroke", "currentColor");
+        if (!el.hasAttribute("stroke-width")) el.setAttribute("stroke-width", "2");
+      }
+    } else {
+      el.setAttribute("fill", "currentColor");
+    }
+  });
+}
+
+// Content outside the viewBox is clipped (e.g. an input label placed left of x=0).
+// Grow the viewBox to the union of itself and the drawn content, plus a margin.
+function fitViewBox(svg) {
+  const b = svg.getBBox();
+  if (!b.width && !b.height) return;
+  const vb = svg.viewBox.baseVal;
+  const has = vb && vb.width > 0 && vb.height > 0;
+  if (has && b.x >= vb.x && b.y >= vb.y && b.x + b.width <= vb.x + vb.width && b.y + b.height <= vb.y + vb.height) return;
+
+  const m = 4;
+  const x0 = Math.min(has ? vb.x : Infinity, b.x - m);
+  const y0 = Math.min(has ? vb.y : Infinity, b.y - m);
+  const x1 = Math.max(has ? vb.x + vb.width : -Infinity, b.x + b.width + m);
+  const y1 = Math.max(has ? vb.y + vb.height : -Infinity, b.y + b.height + m);
+  svg.setAttribute("viewBox", [x0, y0, x1 - x0, y1 - y0].map(n => +n.toFixed(2)).join(" "));
 }
 
 function fitSvgLabels(svg) {
@@ -2001,7 +2066,7 @@ function renderRichText(text) {
 }
 
 function applyRichFormatting(el) {
-  fitDiagramLabels(el);
+  fixDiagrams(el);
   if (typeof hljs !== "undefined") {
     el.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
   }
