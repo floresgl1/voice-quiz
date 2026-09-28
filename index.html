@@ -211,7 +211,8 @@
       color: var(--text);
     }
 
-    .diagram.diagram-sm svg { max-width: 260px; }
+    .diagram.diagram-sm svg { max-width: 360px; }
+    .diagram-fallback { font-size: 0.85rem; color: var(--text-muted); text-align: left; margin: 0; }
     .diagram.diagram-sm { padding: 0.6rem; margin-bottom: 0.6rem; }
 
     code {
@@ -1889,6 +1890,7 @@ function showDiagram(el, q) {
   if (!el) return;
   if (q.diagram) {
     el.innerHTML = q.diagram;
+    el.dataset.alt = q.diagram_alt || "";
     el.classList.remove("hidden");
     fixDiagrams(el);
   } else {
@@ -1897,11 +1899,13 @@ function showDiagram(el, q) {
   }
 }
 
-// Model-drawn SVG gets three fixes after it renders, all in code because the
+// Model-drawn SVG gets these fixes after it renders, all in code because the
 // prompt rules alone aren't followed reliably:
 //   1. colors: hard-coded or default (black) fills/strokes become theme-safe
-//   2. labels: fit inside their boxes (below)
-//   3. viewBox: grown to include anything drawn outside it, so nothing is clipped
+//   2. wiring: a diagram with a floating wire is replaced by its description;
+//      junction dots with nothing branching off them are removed
+//   3. labels: fit inside their boxes (below)
+//   4. viewBox: grown to include anything drawn outside it, so nothing is clipped
 // Every step is a no-op on an already-fixed diagram, since callers may run it
 // twice (e.g. showDiagram then applyRichFormatting on the same container).
 //
@@ -1919,9 +1923,160 @@ function fixDiagrams(root) {
   if (root.matches && root.matches(".diagram")) svgs.push(...root.querySelectorAll(":scope > svg"));
   svgs.forEach(svg => {
     fixDiagramColors(svg);
+    const wiring = checkDiagramWiring(svg);
+    if (!wiring.ok) return showDiagramFallback(svg);
+    removeStrayDots(svg, wiring.wires);
     fitSvgLabels(svg);
     fitViewBox(svg);
   });
+}
+
+// Code can repaint and resize a diagram, but it can't repair a wrongly drawn
+// circuit. So wiring is checked, and a diagram with a floating wire is replaced
+// by its spoken description instead of being shown.
+//
+// A wire is a <line>, <polyline>, or a <path> made only of straight segments.
+// Each end must touch something: a box/shape/other wire within WIRE_TOL, or a
+// text label within LABEL_TOL (labels are told to sit clear of wires). At least
+// one end must touch something other than a label, or a stub whose only
+// neighbour is its own label would pass. Exempt: short strokes that are parts
+// of symbols (capacitor plates, ground bars, a diode bar), recognised by a wire
+// ending on them or a parallel short stroke right beside them.
+const WIRE_TOL = 3;
+const LABEL_TOL = 10;
+const SYMBOL_STROKE_MAX = 30;
+
+function checkDiagramWiring(svg) {
+  const toSvg = el => svg.getScreenCTM().inverse().multiply(el.getScreenCTM());
+  const pt = (m, x, y) => { const p = new DOMPoint(x, y).matrixTransform(m); return { x: p.x, y: p.y }; };
+  const box = el => {
+    const b = el.getBBox(), m = toSvg(el);
+    const c = [pt(m, b.x, b.y), pt(m, b.x + b.width, b.y), pt(m, b.x, b.y + b.height), pt(m, b.x + b.width, b.y + b.height)];
+    const xs = c.map(p => p.x), ys = c.map(p => p.y);
+    return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+  };
+
+  const wires = [], solids = [], labels = [];
+  svg.querySelectorAll("line, polyline, path, rect, circle, ellipse, polygon, text").forEach(el => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === "text") return labels.push(box(el));
+    const local = wirePoints(el, tag);
+    if (local) {
+      const m = toSvg(el);
+      const pts = local.map(p => pt(m, p.x, p.y));
+      if (pts.length >= 2) return wires.push({ el, pts });
+    }
+    solids.push(box(el));
+  });
+
+  const nearBox = (p, b, tol) => p.x >= b.x0 - tol && p.x <= b.x1 + tol && p.y >= b.y0 - tol && p.y <= b.y1 + tol;
+  const onOtherWire = (p, w) => wires.some(o => o !== w && segmentsOf(o).some(([a, b]) => distToSegment(p, a, b) <= WIRE_TOL));
+
+  const floating = [];
+  wires.forEach(w => {
+    const ends = [w.pts[0], w.pts[w.pts.length - 1]];
+    const solidAt = ends.map(p => solids.some(b => nearBox(p, b, WIRE_TOL)) || onOtherWire(p, w));
+    const labelAt = ends.map(p => labels.some(b => nearBox(p, b, LABEL_TOL)));
+    const ok = ends.every((_, i) => solidAt[i] || labelAt[i]) && solidAt.some(Boolean);
+    if (!ok && !isSymbolStroke(w, wires)) floating.push(w.el);
+  });
+  return { ok: floating.length === 0, floating, wires };
+}
+
+function wirePoints(el, tag) {
+  const n = a => parseFloat(el.getAttribute(a)) || 0;
+  if (tag === "line") return [{ x: n("x1"), y: n("y1") }, { x: n("x2"), y: n("y2") }];
+  if (tag === "polyline") return [...el.points].map(p => ({ x: p.x, y: p.y }));
+  if (tag === "path") return straightPathPoints(el.getAttribute("d") || "");
+  return null;
+}
+
+// Points of a path built only from M/L/H/V (absolute or relative) with a single
+// subpath; anything with curves, arcs or Z is a symbol or shape, not a wire.
+function straightPathPoints(d) {
+  if (!/^[MmLlHhVv\d\s,.eE+-]+$/.test(d)) return null;
+  const tokens = d.match(/[MmLlHhVv]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g) || [];
+  const pts = [];
+  let cmd = null, x = 0, y = 0, i = 0;
+  const num = () => parseFloat(tokens[i++]);
+  while (i < tokens.length) {
+    if (/[A-Za-z]/.test(tokens[i])) {
+      cmd = tokens[i++];
+      if (/[Mm]/.test(cmd) && pts.length) return null;  // second subpath: not a single wire
+    }
+    if (!cmd) return null;
+    const rel = cmd === cmd.toLowerCase();
+    switch (cmd.toUpperCase()) {
+      case "M": case "L": { const nx = num(), ny = num(); x = rel ? x + nx : nx; y = rel ? y + ny : ny; break; }
+      case "H": { const nx = num(); x = rel ? x + nx : nx; break; }
+      case "V": { const ny = num(); y = rel ? y + ny : ny; break; }
+    }
+    if (Number.isNaN(x) || Number.isNaN(y)) return null;
+    pts.push({ x, y });
+    if (cmd === "M") cmd = "L"; else if (cmd === "m") cmd = "l";  // implicit lineto after moveto
+  }
+  return pts;
+}
+
+function segmentsOf(w) {
+  const segs = [];
+  for (let i = 1; i < w.pts.length; i++) segs.push([w.pts[i - 1], w.pts[i]]);
+  return segs;
+}
+
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+function isSymbolStroke(w, wires) {
+  if (w.pts.length !== 2) return false;
+  const [a, b] = w.pts, len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len > SYMBOL_STROKE_MAX) return false;
+  // Another wire ends on it: a lead meeting a capacitor plate or diode bar.
+  const touched = wires.some(o => o !== w && [o.pts[0], o.pts[o.pts.length - 1]].some(p => distToSegment(p, a, b) <= WIRE_TOL));
+  if (touched) return true;
+  // A parallel short stroke right beside it: the other plate, or the next ground bar.
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  return wires.some(o => {
+    if (o === w || o.pts.length !== 2) return false;
+    const [c, d] = o.pts, olen = Math.hypot(d.x - c.x, d.y - c.y);
+    if (!olen || olen > SYMBOL_STROKE_MAX) return false;
+    const cross = Math.abs((b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x)) / (len * olen);
+    const omid = { x: (c.x + d.x) / 2, y: (c.y + d.y) / 2 };
+    return cross < 0.1 && Math.hypot(mid.x - omid.x, mid.y - omid.y) <= 12;
+  });
+}
+
+// A filled junction dot means "these wires connect". One sitting on the middle
+// of a single straight run (nothing branching off) says nothing, so remove it.
+function removeStrayDots(svg, wires) {
+  const ink = getComputedStyle(svg).color;
+  const m = svg.getScreenCTM().inverse();
+  svg.querySelectorAll("circle").forEach(c => {
+    if (parseFloat(c.getAttribute("r")) > 4 || getComputedStyle(c).fill !== ink) return;
+    const cm = m.multiply(c.getScreenCTM());
+    const p = new DOMPoint(parseFloat(c.getAttribute("cx")) || 0, parseFloat(c.getAttribute("cy")) || 0).matrixTransform(cm);
+    let branches = 0;
+    wires.forEach(w => segmentsOf(w).forEach(([a, b]) => {
+      if (distToSegment(p, a, b) > WIRE_TOL) return;
+      const atEnd = Math.hypot(p.x - a.x, p.y - a.y) <= WIRE_TOL || Math.hypot(p.x - b.x, p.y - b.y) <= WIRE_TOL;
+      branches += atEnd ? 1 : 2;
+    }));
+    if (branches === 2) c.remove();
+  });
+}
+
+function showDiagramFallback(svg) {
+  const container = svg.closest(".diagram");
+  const alt = container?.dataset.alt;
+  const p = document.createElement("p");
+  p.className = "diagram-fallback";
+  p.textContent = alt
+    ? `Diagram hidden because it was drawn with disconnected wires. Described: ${alt}`
+    : "Diagram hidden because it was drawn with disconnected wires.";
+  svg.replaceWith(p);
 }
 
 // SVG's default fill is black, and Claude sometimes hard-codes colors, so a box
@@ -2044,7 +2199,8 @@ function splitLabel(t) {
 
 function diagramHtml(q, extraClass = "") {
   if (!q.diagram) return "";
-  return `<div class="diagram ${extraClass}">${q.diagram}</div>`;
+  const alt = (q.diagram_alt || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return `<div class="diagram ${extraClass}" data-alt="${alt}">${q.diagram}</div>`;
 }
 
 // The question is read aloud, so describe the circuit instead of skipping it.
