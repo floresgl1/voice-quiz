@@ -1893,10 +1893,20 @@ function showDiagram(el, q) {
     el.dataset.alt = q.diagram_alt || "";
     el.classList.remove("hidden");
     fixDiagrams(el);
+  } else if (q.diagram_alt) {
+    el.innerHTML = describedDiagramHtml(q.diagram_alt);
+    el.classList.remove("hidden");
   } else {
     el.innerHTML = "";
     el.classList.add("hidden");
   }
+}
+
+// The server keeps the description when it has to drop a diagram's SVG, so a
+// question that says "the circuit shown" still has the circuit in words.
+function describedDiagramHtml(alt) {
+  const text = alt.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return `<p class="diagram-fallback">Diagram unavailable. Described: ${text}</p>`;
 }
 
 // Model-drawn SVG gets these fixes after it renders, all in code because the
@@ -2198,7 +2208,9 @@ function splitLabel(t) {
 }
 
 function diagramHtml(q, extraClass = "") {
-  if (!q.diagram) return "";
+  if (!q.diagram) {
+    return q.diagram_alt ? `<div class="diagram ${extraClass}">${describedDiagramHtml(q.diagram_alt)}</div>` : "";
+  }
   const alt = (q.diagram_alt || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   return `<div class="diagram ${extraClass}" data-alt="${alt}">${q.diagram}</div>`;
 }
