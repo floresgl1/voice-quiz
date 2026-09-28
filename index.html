@@ -1890,10 +1890,46 @@ function showDiagram(el, q) {
   if (q.diagram) {
     el.innerHTML = q.diagram;
     el.classList.remove("hidden");
+    fitDiagramLabels(el);
   } else {
     el.innerHTML = "";
     el.classList.add("hidden");
   }
+}
+
+// Claude places diagram labels without being able to measure them, so a long
+// label can spill out of its box. After render, shrink any label that is wider
+// than the smallest <rect> containing its center. Labels outside every box are
+// left alone. Needs the diagram visible: getBBox() is 0 for display:none.
+function fitDiagramLabels(root) {
+  const PAD = 4;
+  root.querySelectorAll(".diagram svg").forEach(svg => fitSvgLabels(svg, PAD));
+  if (root.matches && root.matches(".diagram")) root.querySelectorAll(":scope > svg").forEach(svg => fitSvgLabels(svg, PAD));
+}
+
+function fitSvgLabels(svg, pad) {
+  const rects = [...svg.querySelectorAll("rect")].map(r => r.getBBox()).filter(b => b.width > 0);
+  svg.querySelectorAll("text").forEach(t => {
+    const b = t.getBBox();
+    if (!b.width) return;
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    const box = rects
+      .filter(r => cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height)
+      .sort((a, c) => a.width * a.height - c.width * c.height)[0];
+    if (!box) return;
+
+    const left = box.x + pad, right = box.x + box.width - pad;
+    const anchor = getComputedStyle(t).textAnchor;
+    // Shrinking keeps the anchor point fixed, so the room available depends on the anchor.
+    let room;
+    if (anchor === "middle") room = 2 * Math.min(cx - left, right - cx);
+    else if (anchor === "end") room = b.x + b.width - left;
+    else room = right - b.x;
+    if (room <= 0 || b.width <= room) return;
+
+    const size = parseFloat(getComputedStyle(t).fontSize) || 13;
+    t.setAttribute("font-size", (size * room / b.width).toFixed(2));
+  });
 }
 
 function diagramHtml(q, extraClass = "") {
@@ -1920,6 +1956,7 @@ function renderRichText(text) {
 }
 
 function applyRichFormatting(el) {
+  fitDiagramLabels(el);
   if (typeof hljs !== "undefined") {
     el.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
   }
