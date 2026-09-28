@@ -28,6 +28,7 @@ Circuit diagrams:
 - The root <svg> MUST have a viewBox (e.g. viewBox="0 0 320 200") and MUST NOT have width or height; the page sizes it.
 - Use stroke="currentColor" and fill="none" for wires and component bodies, and fill="currentColor" for <text> and for solid junction dots, so the diagram works in both light and dark themes. Never use hard-coded colors like black or #000.
 - Use stroke-width="2", font-size="13", and keep labels (R1, 10k, Vin, Vout, GND) clear of the wires.
+- A label inside a box must fit inside it: at font-size 13 allow about 8 units of width per character plus padding. Center it with text-anchor="middle" at the box's center, and split labels longer than about 12 characters over two <text> lines (e.g. "Next-State" / "Logic") rather than widening past the neighboring wires.
 - Draw standard symbols: resistor as a zigzag <polyline>, capacitor as two parallel plates, battery/DC source as alternating long and short plates, ground as three shrinking horizontal bars, wires as straight horizontal or vertical <line> segments meeting at right angles, junctions as small filled circles (r="3").
 - Keep it small and readable — under about 10 components.
 
@@ -69,7 +70,7 @@ def build_choices_prompt(questions: list[dict]) -> str:
     )
     return f"""For each question below, generate 4 multiple-choice options: one correct answer and three plausible distractors.
 
-Return ONLY a JSON array where each element is an array of 4 strings (the choices). The correct answer should be randomly placed among the 4 options (not always first). Distractors should be wrong but realistic.
+Return ONLY a JSON array where each element is an array of 4 strings (the choices). Distractors should be wrong but realistic.
 
 Questions:
 {q_list}"""

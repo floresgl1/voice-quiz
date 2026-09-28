@@ -1890,10 +1890,91 @@ function showDiagram(el, q) {
   if (q.diagram) {
     el.innerHTML = q.diagram;
     el.classList.remove("hidden");
+    fitDiagramLabels(el);
   } else {
     el.innerHTML = "";
     el.classList.add("hidden");
   }
+}
+
+// Claude places diagram labels without being able to measure them, so a long
+// label can spill out of its box. After render, fit any label that is wider
+// than the smallest <rect> containing its center: shrink it slightly, or, if
+// that would make it too small to read, split it onto two lines first. Labels
+// outside every box are left alone. Needs the diagram visible: getBBox() is 0
+// for display:none.
+const LABEL_PAD = 4;
+const LABEL_MIN_SCALE = 0.85;  // below this, splitting reads better than shrinking
+
+function fitDiagramLabels(root) {
+  root.querySelectorAll(".diagram svg").forEach(fitSvgLabels);
+  if (root.matches && root.matches(".diagram")) root.querySelectorAll(":scope > svg").forEach(fitSvgLabels);
+}
+
+function fitSvgLabels(svg) {
+  const rects = [...svg.querySelectorAll("rect")].map(r => r.getBBox()).filter(b => b.width > 0);
+  svg.querySelectorAll("text").forEach(t => {
+    const b = t.getBBox();
+    if (!b.width) return;
+    const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    const box = rects
+      .filter(r => cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height)
+      .sort((a, c) => a.width * a.height - c.width * c.height)[0];
+    if (!box) return;
+
+    let scale = labelScale(t, box);
+    if (scale >= 1) return;
+    if (scale < LABEL_MIN_SCALE && splitLabel(t)) scale = labelScale(t, box);
+    if (scale >= 1) return;
+
+    const size = parseFloat(getComputedStyle(t).fontSize) || 13;
+    t.setAttribute("font-size", (size * scale).toFixed(2));
+  });
+}
+
+// How much the label must shrink to fit inside box (>= 1 means it already fits).
+// Shrinking keeps the text-anchor point fixed, so the horizontal room depends on the anchor.
+function labelScale(t, box) {
+  const b = t.getBBox();
+  const left = box.x + LABEL_PAD, right = box.x + box.width - LABEL_PAD;
+  const anchor = getComputedStyle(t).textAnchor;
+  let room;
+  if (anchor === "middle") room = 2 * Math.min(b.x + b.width / 2 - left, right - b.x - b.width / 2);
+  else if (anchor === "end") room = b.x + b.width - left;
+  else room = right - b.x;
+  if (room <= 0) return 1;
+  const vroom = box.height - 2 * LABEL_PAD;
+  return Math.min(room / b.width, vroom / b.height);
+}
+
+// Break a single-line label at the space or hyphen nearest its middle and
+// re-lay it as two <tspan> lines centered on the original baseline.
+function splitLabel(t) {
+  if (t.children.length) return false;  // already laid out with tspans
+  const text = t.textContent.trim();
+  let best = null;
+  for (let i = 1; i < text.length - 1; i++) {
+    let first, second;
+    if (text[i] === " ") { first = text.slice(0, i); second = text.slice(i + 1); }
+    else if (text[i] === "-") { first = text.slice(0, i + 1); second = text.slice(i + 1); }
+    else continue;
+    const longest = Math.max(first.length, second.length);
+    if (!best || longest < best.longest) best = { first: first.trim(), second: second.trim(), longest };
+  }
+  if (!best) return false;
+
+  const x = t.getAttribute("x") || "0";
+  const y = parseFloat(t.getAttribute("y")) || 0;
+  const lineHeight = (parseFloat(getComputedStyle(t).fontSize) || 13) * 1.15;
+  t.textContent = "";
+  [[best.first, y - lineHeight / 2], [best.second, y + lineHeight / 2]].forEach(([line, ly]) => {
+    const span = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+    span.setAttribute("x", x);
+    span.setAttribute("y", ly.toFixed(2));
+    span.textContent = line;
+    t.appendChild(span);
+  });
+  return true;
 }
 
 function diagramHtml(q, extraClass = "") {
@@ -1920,6 +2001,7 @@ function renderRichText(text) {
 }
 
 function applyRichFormatting(el) {
+  fitDiagramLabels(el);
   if (typeof hljs !== "undefined") {
     el.querySelectorAll("pre code").forEach(block => hljs.highlightElement(block));
   }
